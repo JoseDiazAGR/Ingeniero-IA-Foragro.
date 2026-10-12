@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints públicos del kiosco ChatAgro POP:
   WS   /api/chat-ws          — WebSocket manos libres (PDV-aware, escalada, offline cache)
   POST /api/chat             — Chat HTTP (fallback / API directa)
@@ -100,6 +100,7 @@ async def websocket_chat_endpoint(websocket: WebSocket):
     lead_id = None
     punto_venta_codigo = None
     punto_venta_id = None
+    selected_voice = "onyx"
 
     try:
         while True:
@@ -110,9 +111,11 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             # ── Inicialización de sesión PDV ──────────────────────────────
             if msg_type == "init":
                 punto_venta_codigo = data.get("pdv", DEFAULT_PDV_CODE).upper()
+                if data.get("voice"):
+                    selected_voice = data.get("voice")
                 with get_db() as conn:
                     punto_venta_id = _resolve_pdv_id(conn, punto_venta_codigo)
-                logger.info("🏪 PDV conectado: %s (id=%s)", punto_venta_codigo, punto_venta_id)
+                logger.info("🏪 PDV conectado: %s (id=%s, voz=%s)", punto_venta_codigo, punto_venta_id, selected_voice)
                 await websocket.send_json({
                     "type": "ready",
                     "pdv": punto_venta_codigo,
@@ -166,8 +169,9 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
             # ── TTS (síntesis de voz con fallback transparente) ───────────
             audio_b64 = None
+            requested_voice = data.get("voice", selected_voice)
             try:
-                audio_bytes = await synthesize_speech(reply_text, voice="onyx")
+                audio_bytes = await synthesize_speech(reply_text, voice=requested_voice)
                 audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
             except Exception as tts_err:
                 logger.info("TTS en la nube no disponible (%s). El kiosco usará síntesis del navegador.", tts_err)
