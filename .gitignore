@@ -1,0 +1,27 @@
+# Entorno virtual y dependencias
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variables de entorno y secretos
+.env
+.env*
+*.env*
+*.backup
+backend/.env
+
+# Base de datos local
+*.db
+*.sqlite3
+backend/agro_ia.db
+backend/cache/
+
+# Archivos de sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

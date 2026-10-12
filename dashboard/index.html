@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard & CRM Comercial — FORAGRO v2.0</title>
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self';
+               style-src 'self' 'unsafe-inline';
+               connect-src 'self' http://localhost:8000;
+               object-src 'none';
+               base-uri 'none';
+               frame-ancestors 'none';">
+<link rel="stylesheet" href="../shared/css/base.css">
+<link rel="stylesheet" href="css/dashboard.css">
+<style>
+  .dash-actions select { padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: white; }
+  .history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+  .wa-message { padding: 8px; margin-bottom: 5px; border-radius: 8px; max-width: 85%; font-size: 13px; }
+  .wa-message.user { background: #E8F5E9; margin-left: auto; border-bottom-right-radius: 0; }
+  .wa-message.assistant { background: #F1F1F1; margin-right: auto; border-bottom-left-radius: 0; }
+  .agronomo-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+  <div class="dashboard" id="dashboard">
+    <!-- Encabezado Principal -->
+    <div class="dash-header">
+      <div>
+        <div class="brand-title">FORAGRO Honduras</div>
+        <h1>Dashboard & CRM Comercial — v2.0</h1>
+        <div class="subtitle">Monitoreo de red de Puntos de Venta (PDV), CRM y WhatsApp</div>
+      </div>
+      <div class="dash-actions">
+        <select id="globalPdvFilter" title="Filtrar por Punto de Venta">
+            <option value="">Todos los PDVs</option>
+            <!-- Llenado dinámico -->
+        </select>
+        <button class="btn btn-primary" id="exportCsvBtn" type="button" title="Descargar CSV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar
+        </button>
+        <a href="/admin-panel/" class="btn" style="background:#e0e0e0; color:black; text-decoration:none;">⚙️ Admin</a>
+        <button class="btn" id="refreshBtn" type="button">Actualizar</button>
+        <button class="btn btn-danger-outline" id="logoutBtn" type="button">Salir</button>
+      </div>
+    </div>
+
+    <!-- Pestañas de Navegación -->
+    <div class="dash-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="tabMetrics" role="tab" aria-selected="true">📊 KPIs Globales</button>
+      <button class="tab-btn" data-tab="tabCRM" role="tab" aria-selected="false">👥 CRM Productores (<span id="tabLeadCount">0</span>)</button>
+      <button class="tab-btn" data-tab="tabInventory" role="tab" aria-selected="false">📦 Inventario PDV</button>
+      <button class="tab-btn" data-tab="tabAgronomos" role="tab" aria-selected="false">👨‍🌾 Desempeño Agrónomos</button>
+    </div>
+
+    <!-- ==================== TAB 1: MÉTRICAS & CAMPAÑAS ==================== -->
+    <div class="tab-pane active" id="tabMetrics">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="statLeads">0</div>
+          <div class="stat-label">Productores Registrados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statManzanas">0 mz</div>
+          <div class="stat-label">Área Agrícola Atendida</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statCoupons">0</div>
+          <div class="stat-label">Cupones 5% Canjeados</div>
+        </div>
+        <div class="stat-card" style="background:#E8F5E9; border: 1px solid #C8E6C9;">
+          <div class="stat-value" id="statEscaladas" style="color:var(--primary);">0</div>
+          <div class="stat-label">Escaladas Pendientes IA</div>
+        </div>
+      </div>
+      <!-- Atribución -->
+      <div class="two-col-grid">
+        <div class="panel">
+          <div class="panel-title">Canales de Atribución (Kiosco vs WA)</div>
+          <div id="campaignChart"></div>
+          <table class="campaign-table" style="margin-top:16px;">
+            <thead><tr><th>Canal</th><th>Leads</th><th>% del Total</th><th>Cupones</th></tr></thead>
+            <tbody id="campaignBody"><tr><td colspan="4" style="text-align:center;">Cargando...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Top Cultivos Atendidos</div>
+          <div id="cropsChart"></div>
+          <div class="panel-subtitle" style="margin-top:16px;font-weight:600;font-size:13px;">Patologías más Consultadas:</div>
+          <div id="issuesList" class="chips-container" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: CRM DE PRODUCTORES & SEGUIMIENTO ==================== -->
+    <div class="tab-pane" id="tabCRM">
+      <div class="panel">
+        <div class="crm-toolbar">
+          <div class="search-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="crmSearchInput" placeholder="Buscar por teléfono, productor, zona...">
+          </div>
+          <div class="filter-group">
+            <select id="crmFilterCultivo">
+              <option value="">Cultivos</option>
+              <option value="Café">Café</option><option value="Maíz">Maíz</option><option value="Frijol">Frijol</option>
+            </select>
+            <select id="crmFilterEstado">
+              <option value="">Estados</option>
+              <option value="Nuevo">Nuevo</option><option value="Contactado">Contactado</option><option value="Venta Cerrada">Venta Cerrada</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>PDV Origen</th>
+                <th>Productor / Finca</th>
+                <th>Cultivo & Problema</th>
+                <th>WhatsApp</th>
+                <th>Estado CRM</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="crmTableBody">
+              <tr><td colspan="7" style="text-align:center;padding:24px;">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: INVENTARIO DE BODEGA ==================== -->
+    <div class="tab-pane" id="tabInventory">
+      <div class="panel">
+        <div class="panel-title">Catálogo e Inventario Centralizado</div>
+        <div class="table-responsive">
+          <table class="crm-table">
+            <thead>
+              <tr>
+                <th>SKU</th><th>Producto</th><th>Categoría</th><th>IA Activo</th><th>Dosis</th><th>Precio</th><th>Stock Global</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody">
+              <tr><td colspan="7" style="text-align:center;padding:20px;">Cargando inventario...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 4: AGRÓNOMOS ==================== -->
+    <div class="tab-pane" id="tabAgronomos">
+      <div class="panel">
+        <div class="panel-title">Desempeño y Atención de Agrónomos</div>
+        <div id="agronomosGrid" class="two-col-grid" style="margin-top: 20px;">
+            <!-- Llenado dinámico -->
+            <div style="padding:20px;">Cargando estadísticas...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE DETALLE DE LEAD CRM ==================== -->
+  <div class="modal-backdrop hidden" id="leadModalBackdrop">
+    <div class="modal-dialog" style="max-width: 900px;">
+      <div class="modal-header">
+        <div>
+          <h2 id="modalLeadTitle">Detalle del Productor</h2>
+          <div class="modal-sub" id="modalLeadSub">PDV: -</div>
+        </div>
+        <button class="btn-close-modal" id="modalCloseBtn" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="lead-detail-grid">
+          <div class="detail-item"><span class="detail-label">Cultivo:</span><span class="detail-val" id="dCultivo">-</span></div>
+          <div class="detail-item"><span class="detail-label">Zona:</span><span class="detail-val" id="dZona">-</span></div>
+          <div class="detail-item"><span class="detail-label">Manzanas:</span><span class="detail-val" id="dManzanas">-</span></div>
+          <div class="detail-item"><span class="detail-label">Problema:</span><span class="detail-val" id="dProblema">-</span></div>
+          <div class="detail-item"><span class="detail-label">Teléfono:</span><span class="detail-val" id="dTelefono">-</span></div>
+          <div class="detail-item"><span class="detail-label">Cupón:</span><span class="detail-val" id="dCupon" style="color:var(--primary);font-weight:bold;">-</span></div>
+        </div>
+
+        <div class="crm-followup-box" style="margin-top:20px;">
+          <div class="form-row">
+            <div class="form-col">
+              <label>Estado CRM:</label>
+              <select id="mEstadoSeguimiento">
+                <option value="Nuevo">Nuevo</option><option value="Contactado">Contactado</option><option value="Venta Cerrada">Venta Cerrada</option>
+              </select>
+            </div>
+            <div class="form-col">
+              <label>Agrónomo Asignado:</label>
+              <input type="text" id="mAgronomoAsignado">
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <label>Notas Técnicas:</label>
+            <textarea id="mNotasSeguimiento" rows="2"></textarea>
+          </div>
+          <div style="margin-top:10px;text-align:right;">
+            <button class="btn btn-primary" id="btnSaveLeadCrm" type="button">Guardar Actualización</button>
+          </div>
+        </div>
+
+        <!-- Historiales de Kiosco y WhatsApp Lado a Lado -->
+        <div class="history-grid" style="margin-top: 20px;">
+            <div>
+                <div class="box-subtitle">💬 Conversación en Kiosco (Tablet)</div>
+                <div class="transcript-box" id="modalChatHistory" style="height: 300px; overflow-y: auto;">
+                    <div style="color:#888;">Sin historial en Kiosco.</div>
+                </div>
+            </div>
+            <div>
+                <div class="box-subtitle">📱 Historial WhatsApp Continúo</div>
+                <div class="transcript-box" id="modalWaHistory" style="height: 300px; overflow-y: auto; background: #e5ddd5;">
+                    <div style="color:#888;">Sin historial de WhatsApp.</div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

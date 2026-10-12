@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración — FORAGRO</title>
+    <link rel="stylesheet" href="/admin-panel/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <div class="brand">
+                <img src="/shared/logo.png" alt="FORAGRO" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'40\'><text y=\'20\' fill=\'white\'>FORAGRO Admin</text></svg>'">
+            </div>
+            <nav>
+                <a href="#" class="nav-item active" data-tab="products"><i class="fas fa-boxes"></i> Productos</a>
+                <a href="#" class="nav-item" data-tab="metrics"><i class="fas fa-chart-pie"></i> Métricas</a>
+                <a href="#" class="nav-item" data-tab="reports"><i class="fas fa-file-export"></i> Reportes</a>
+                <a href="#" class="nav-item" data-tab="escaladas"><i class="fas fa-headset"></i> Escaladas (IA)</a>
+                <a href="/dashboard/" class="nav-item back-link"><i class="fas fa-arrow-left"></i> Volver a CRM</a>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <header class="topbar">
+                <h1>Panel de Configuración (No-Code)</h1>
+                <div class="user-info">Administrador</div>
+            </header>
+
+            <!-- TAB: Productos -->
+            <section id="tab-products" class="tab-pane active">
+                <div class="header-actions">
+                    <h2>Catálogo de Productos</h2>
+                    <button class="btn btn-primary" id="btn-new-product"><i class="fas fa-plus"></i> Nuevo Producto</button>
+                </div>
+                <div class="table-container">
+                    <table id="products-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th>Precio (HNL)</th>
+                                <th>Stock</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Llenado dinámico -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: Métricas Custom -->
+            <section id="tab-metrics" class="tab-pane">
+                <div class="header-actions">
+                    <h2>Gestor de Métricas</h2>
+                    <button class="btn btn-primary" id="btn-new-metric"><i class="fas fa-plus"></i> Nueva Métrica</button>
+                </div>
+                <div class="cards-grid" id="metrics-grid">
+                    <!-- Llenado dinámico -->
+                </div>
+            </section>
+
+            <!-- TAB: Reportes -->
+            <section id="tab-reports" class="tab-pane">
+                <h2>Exportar Datos</h2>
+                <div class="export-card">
+                    <form id="export-form">
+                        <div class="form-group">
+                            <label>Tipo de Datos</label>
+                            <select id="export-type">
+                                <option value="leads">Productores / CRM</option>
+                                <option value="products">Inventario</option>
+                                <option value="escaladas">Alertas a Agrónomos</option>
+                                <option value="whatsapp">Historial WhatsApp</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Periodo (Días)</label>
+                            <input type="number" id="export-days" value="30" min="1" max="365">
+                        </div>
+                        <button type="submit" class="btn btn-success"><i class="fas fa-download"></i> Descargar CSV</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- TAB: Escaladas -->
+            <section id="tab-escaladas" class="tab-pane">
+                <h2>Bandeja de Escaladas (IA → Humano)</h2>
+                <div class="table-container">
+                    <table id="escaladas-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>PDV</th>
+                                <th>Productor</th>
+                                <th>Pregunta / Motivo</th>
+                                <th>Estado</th>
+                                <th>Agrónomo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Llenado dinámico -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2 id="modal-title">Título</h2>
+            <div id="modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-modal-close">Cancelar</button>
+                <button class="btn btn-primary" id="btn-modal-save">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/admin-panel/js/admin.js"></script>
+</body>
+</html>

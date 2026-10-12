@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inge. Agro IA — FORAGRO Kiosco</title>
+    <link rel="stylesheet" href="/kiosk/css/kiosk.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="/kiosk/manifest.json">
+    <meta name="theme-color" content="#041009">
+</head>
+<body>
+    <!-- Ambient ambient glow effects -->
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="kiosk-container">
+        
+        <!-- PANTALLA 1: INICIO LIMPIO (Solo botón para iniciar) -->
+        <section class="idle-screen" id="idle-screen">
+            <div class="idle-brand">
+                <img src="/shared/logo.png" alt="FORAGRO" class="idle-logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'160\' height=\'48\'><text y=\'32\' font-size=\'26\' font-weight=\'bold\' fill=\'%2310b981\'>FORAGRO</text></svg>'">
+                <h1>Ingeniero Agrónomo Virtual</h1>
+                <p class="idle-subtitle">Asesoría técnica para tu cultivo en tiempo real</p>
+            </div>
+
+            <div class="start-action-wrapper">
+                <button id="btn-start" class="btn-start" aria-label="Iniciar Consulta">
+                    <div class="start-icon-wrap">
+                        <i class="fas fa-microphone"></i>
+                    </div>
+                    <span class="start-btn-title">Iniciar Consulta</span>
+                    <span class="start-btn-sub">Toca para hablar</span>
+                </button>
+                <div class="pulse-ring"></div>
+            </div>
+
+            <div class="idle-footer">
+                <div class="status-indicator">
+                    <i class="fas fa-wifi" id="network-icon"></i>
+                    <span id="idle-status">Sistema listo</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANTALLA 2: CHAT ACTIVO (Solo se muestra cuando inicia la conversación) -->
+        <section class="active-screen hidden" id="active-screen">
+            <!-- Header Minimalista -->
+            <header class="kiosk-header">
+                <div class="header-left">
+                    <span class="header-brand-name">🌿 Inge. FORAGRO</span>
+                    <span class="pdv-chip" id="pdv-badge">PDV: ---</span>
+                </div>
+                <div class="header-right">
+                    <span class="status-badge-text" id="status-text">Escuchando...</span>
+                    <button id="btn-reset" class="btn-reset" title="Reiniciar conversación">
+                        <i class="fas fa-rotate-right"></i> Terminar
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat Log Stream -->
+            <main class="chat-area" id="chat-log">
+                <!-- Mensajes dinámicos -->
+            </main>
+
+            <!-- Controles Minimalistas Inferiores -->
+            <div class="active-controls">
+                <div class="mic-toggle-wrapper">
+                    <button id="btn-mic" class="btn-mic active" aria-label="Alternar Micrófono">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <div class="mic-ripple"></div>
+                </div>
+                <p class="mic-hint" id="mic-hint">Micrófono manos libres activo</p>
+            </div>
+        </section>
+
+        <!-- UI Actions Overlay (Fotos, Productos, Cupón — Solo cuando la IA los invoca) -->
+        <div id="ui-overlay" class="ui-overlay hidden">
+            <button id="close-overlay" class="btn-close" aria-label="Cerrar"><i class="fas fa-times"></i></button>
+            <div id="overlay-content" class="overlay-content">
+                <!-- Inyectado dinámicamente -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Registrar Service Worker para soporte offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/kiosk/sw.js')
+                    .then(reg => console.log('✅ ServiceWorker registrado', reg))
+                    .catch(err => console.log('SW no disponible', err));
+            });
+        }
+
+        // Listener para UI Actions (Productos, Fotos, Cupones)
+        window.addEventListener('kioskAction', (e) => {
+            const action = e.detail;
+            const overlay = document.getElementById('ui-overlay');
+            const content = document.getElementById('overlay-content');
+            
+            if (action.type === 'show_products') {
+                let html = '<h2><i class="fas fa-boxes-stacked" style="color:#10b981;"></i> Productos Recomendados</h2><div class="cards-grid">';
+                action.data.forEach(p => {
+                    html += `
+                        <div class="card product">
+                            <span class="tag">${p.categoria || 'Insumo'}</span>
+                            <h3>${p.nombre}</h3>
+                            <p>${p.descripcion || p.ingrediente_activo || 'Disponible en bodega'}</p>
+                            ${p.dosis ? `<p style="font-size:11px;color:#a7f3d0;"><i class="fas fa-flask"></i> Dosis: ${p.dosis}</p>` : ''}
+                            <div class="price">L. ${p.precio_hnl ? Number(p.precio_hnl).toFixed(2) : '0.00'}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                content.innerHTML = html;
+                overlay.classList.remove('hidden');
+            } else if (action.type === 'show_disease_photos') {
+                let html = '<h2><i class="fas fa-camera-retro" style="color:#10b981;"></i> Fotos de Referencia</h2><div class="cards-grid">';
+                action.data.forEach(p => {
+                    html += `
+                        <div class="card photo">
+                            <img src="${p.foto_url || ''}" alt="${p.nombre_enfermedad}" onerror="this.style.display='none'">
+                            <h3>${p.nombre_enfermedad}</h3>
+                            <p>${p.descripcion_sintomas || ''}</p>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                content.innerHTML = html;
+                overlay.classList.remove('hidden');
+            } else if (action.type === 'show_coupon') {
+                content.innerHTML = `
+                    <div class="coupon-box">
+                        <h2>🎉 ¡Tu Cupón de Descuento!</h2>
+                        <div class="code">${action.data.cupon}</div>
+                        <p style="font-size:16px;font-weight:700;color:#fbbf24;">${action.data.descuento}% de Descuento</p>
+                        <p>Teléfono: <strong>${action.data.telefono}</strong></p>
+                        <p style="font-size:12px;color:#9ca3af;margin-top:10px;">Presenta este código en caja para canjear tu beneficio.</p>
+                    </div>
+                `;
+                overlay.classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('close-overlay').addEventListener('click', () => {
+            document.getElementById('ui-overlay').classList.add('hidden');
+        });
+
+        // Actualización de estado de red
+        window.addEventListener('online', () => {
+            document.getElementById('network-icon').className = 'fas fa-wifi';
+            const s = document.getElementById('idle-status');
+            if (s) s.textContent = 'Sistema en línea';
+        });
+        window.addEventListener('offline', () => {
+            document.getElementById('network-icon').className = 'fas fa-wifi-slash';
+            const s = document.getElementById('idle-status');
+            if (s) s.textContent = 'Modo Offline (Sin internet)';
+        });
+        if (!navigator.onLine) {
+            document.getElementById('network-icon').className = 'fas fa-wifi-slash';
+        }
+    </script>
+    <script src="/kiosk/js/offline-engine.js"></script>
+    <script src="/kiosk/js/app-ws.js"></script>
+</body>
+</html>

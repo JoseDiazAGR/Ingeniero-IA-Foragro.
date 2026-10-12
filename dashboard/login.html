@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acceso — Dashboard FORAGRO</title>
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self';
+               style-src 'self';
+               connect-src 'self' http://localhost:8000;
+               object-src 'none';
+               base-uri 'none';
+               frame-ancestors 'none';">
+<link rel="stylesheet" href="../shared/css/base.css">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-card" id="loginForm" novalidate>
+      <h1>Dashboard FORAGRO</h1>
+      <p>Acceso solo para personal autorizado.</p>
+      <div class="login-error" id="loginError" role="alert"></div>
+      <div class="login-field">
+        <label for="username">Usuario</label>
+        <input id="username" name="username" type="text" autocomplete="username" required>
+      </div>
+      <div class="login-field">
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="login-submit" id="loginSubmit" type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <script src="../shared/js/config.js"></script>
+  <script src="../shared/js/utils.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

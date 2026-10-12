@@ -1,0 +1,337 @@
+/* ==========================================================================
+   FORAGRO Dashboard & CRM Comercial — Estilos
+   ========================================================================== */
+
+.dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.brand-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--primary);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dash-header h1 { font-size: 24px; font-weight: 700; color: var(--text); margin: 0; }
+.dash-header .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.dash-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  color: var(--text);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.btn:hover { background: var(--bg); transform: translateY(-1px); }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); color: #fff; }
+.btn-danger-outline { color: var(--danger); border-color: rgba(239, 68, 68, 0.3); }
+.btn-danger-outline:hover { background: #fee2e2; }
+.btn-wa { background: #075e54; color: #fff; border-color: #075e54; }
+.btn-wa:hover { background: #128c7e; color: #fff; }
+
+/* Tabs de navegación */
+.dash-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; animation: fadeIn 0.25s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Tarjetas de Estadísticas */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.stat-value { font-size: 28px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; font-weight: 500; }
+.stat-change { font-size: 12px; font-weight: 600; margin-top: 6px; }
+.stat-change.up { color: var(--success); }
+.stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+.two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Gráficos de barras */
+.chart-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.chart-label { width: 120px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+.chart-track { flex: 1; height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
+.chart-fill { height: 100%; border-radius: 9px; transition: width 0.5s ease; }
+.chart-value { width: 45px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text); }
+
+.chips-container { display: flex; flex-wrap: wrap; gap: 6px; }
+.issue-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Tablas */
+.table-responsive { width: 100%; overflow-x: auto; }
+.campaign-table, .crm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.campaign-table th, .crm-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--bg);
+}
+.campaign-table td, .crm-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.crm-table tr:hover td { background: rgba(0, 0, 0, 0.02); }
+
+/* Toolbar de CRM */
+.crm-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  flex: 1;
+  min-width: 250px;
+}
+.search-wrap input {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  color: var(--text);
+}
+.filter-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-group select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+/* Badges de Estado CRM */
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-nuevo { background: #dbeafe; color: #1e40af; }
+.status-contactado { background: #fef3c7; color: #92400e; }
+.status-visita { background: #ede9fe; color: #5b21b6; }
+.status-cerrada { background: #d1fae5; color: #065f46; }
+.status-no-interesado { background: #fee2e2; color: #991b1b; }
+
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.tag-radio { background: #dbeafe; color: #1e40af; }
+.tag-tv { background: #fee2e2; color: #991b1b; }
+.tag-social { background: #d1fae5; color: #065f46; }
+.tag-friend { background: #fef3c7; color: #92400e; }
+.tag-store { background: #e0e7ff; color: #3730a3; }
+.tag-other { background: #f3f4f6; color: #374151; }
+
+/* Modal / Drawer */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 16px;
+  backdrop-filter: blur(3px);
+}
+.modal-dialog {
+  background: var(--card);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 650px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h2 { font-size: 18px; margin: 0; color: var(--text); }
+.modal-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.btn-close-modal { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary); }
+.modal-body { padding: 20px; }
+
+.lead-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  background: var(--bg);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.detail-item { display: flex; flex-direction: column; gap: 2px; }
+.detail-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; }
+.detail-val { font-size: 13px; font-weight: 500; color: var(--text); }
+
+.rec-summary-box {
+  background: rgba(46, 204, 113, 0.08);
+  border: 1px solid rgba(46, 204, 113, 0.25);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.box-subtitle { font-size: 12px; font-weight: 700; color: var(--text); }
+
+.crm-followup-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.form-col { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.crm-followup-box label { font-size: 12px; font-weight: 600; color: var(--text); }
+.crm-followup-box select, .crm-followup-box input, .crm-followup-box textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+}
+.crm-followup-box textarea { resize: vertical; }
+
+.transcript-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.transcript-bubble {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 90%;
+}
+.transcript-bubble.user { align-self: flex-end; background: var(--primary); color: #fff; }
+.transcript-bubble.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); color: var(--text); }
+
+/* Config */
+.config-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.config-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+.config-row:last-child { border-bottom: none; }
+.config-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.config-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.config-value { font-size: 13px; font-weight: 600; font-family: monospace; }

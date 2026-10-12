@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORAGRO — API Explorer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>" />
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --surface2: #1c2128; --border: #30363d;
+      --text: #c9d1d9; --text-dim: #8b949e;
+      --green: #3fb950; --blue: #58a6ff; --orange: #d29922; --red: #f85149;
+      --purple: #bc8cff; --cyan: #39d353;
+      --tag-public-bg: #1a4c2a; --tag-public-t: #3fb950;
+      --tag-auth-bg: #1a2f4c; --tag-auth-t: #58a6ff;
+      --tag-dash-bg: #3a2a0d; --tag-dash-t: #d29922;
+      --tag-pdv-bg: #2a1a4c; --tag-pdv-t: #bc8cff;
+      --tag-admin-bg: #4c1a1a; --tag-admin-t: #f85149;
+      --tag-wa-bg: #1a3a2a; --tag-wa-t: #39d353;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+    code { font-family: monospace; background: var(--surface2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+    header h1 { font-size: 17px; font-weight: 700; color: var(--green); flex: 1; }
+    .hlinks a { color: var(--blue); text-decoration: none; margin-left: 14px; font-size: 12px; }
+    .hlinks a:hover { text-decoration: underline; }
+    #login-status { font-size: 12px; padding: 4px 12px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap; }
+    #login-status.logged { background: var(--tag-public-bg); border-color: var(--tag-public-t); color: var(--tag-public-t); }
+
+    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 53px); }
+
+    nav { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; position: sticky; top: 53px; height: calc(100vh - 53px); }
+    #login-panel { margin: 12px; padding: 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; }
+    #login-panel h3 { font-size: 12px; margin-bottom: 10px; color: var(--blue); font-weight: 600; }
+    #login-panel input { width: 100%; padding: 6px 9px; margin-bottom: 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 12px; }
+    #login-panel button { width: 100%; padding: 6px; background: var(--blue); color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 12px; }
+    #login-panel button:hover { opacity: 0.85; }
+    nav .sep { margin: 6px 0; border-top: 1px solid var(--border); }
+    nav .grp { padding: 8px 14px 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
+    nav a { display: block; padding: 4px 14px 4px 22px; color: var(--text-dim); text-decoration: none; font-size: 11px; border-left: 2px solid transparent; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    nav a:hover { color: var(--text); background: var(--surface2); }
+    nav a.active { color: var(--blue); border-left-color: var(--blue); }
+
+    main { padding: 24px; }
+    .section { margin-bottom: 36px; scroll-margin-top: 70px; }
+    .sec-hdr { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .sec-hdr h2 { font-size: 15px; font-weight: 700; }
+    .sec-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+    .tag { padding: 2px 9px; border-radius: 12px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .tag-public { background: var(--tag-public-bg); color: var(--tag-public-t); }
+    .tag-auth   { background: var(--tag-auth-bg);   color: var(--tag-auth-t); }
+    .tag-dash   { background: var(--tag-dash-bg);   color: var(--tag-dash-t); }
+    .tag-pdv    { background: var(--tag-pdv-bg);    color: var(--tag-pdv-t); }
+    .tag-admin  { background: var(--tag-admin-bg);  color: var(--tag-admin-t); }
+    .tag-wa     { background: var(--tag-wa-bg);     color: var(--tag-wa-t); }
+
+    .ep { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .ep-hdr { display: flex; align-items: center; gap: 9px; padding: 9px 12px; cursor: pointer; user-select: none; }
+    .ep-hdr:hover { background: var(--surface2); }
+    .mtd { padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; font-family: monospace; min-width: 48px; text-align: center; }
+    .GET    { background: #1b4332; color: #40c070; }
+    .POST   { background: #1c3553; color: #58a6ff; }
+    .PUT    { background: #3d2c00; color: #e3b341; }
+    .DELETE { background: #4a1414; color: #f85149; }
+    .WS     { background: #2d1f4a; color: #bc8cff; }
+    .ep-path { font-family: monospace; font-size: 12px; flex: 1; }
+    .ep-desc { font-size: 11px; color: var(--text-dim); }
+    .ep-chev { color: var(--text-dim); font-size: 10px; transition: transform 0.15s; }
+    .ep-chev.open { transform: rotate(90deg); }
+
+    .ep-body { border-top: 1px solid var(--border); padding: 14px; display: none; }
+    .ep-body.open { display: block; }
+    .ep-body label { display: block; font-size: 11px; color: var(--text-dim); margin: 9px 0 4px; }
+    .ep-body label:first-child { margin-top: 0; }
+    .ep-body input, .ep-body textarea, .ep-body select {
+      width: 100%; padding: 6px 9px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); font-size: 12px; font-family: monospace;
+    }
+    .ep-body textarea { resize: vertical; min-height: 80px; }
+    .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+    .btn-run { padding: 6px 16px; background: var(--green); color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 12px; }
+    .btn-run:hover { opacity: 0.85; }
+    .btn-clr { padding: 6px 12px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .btn-clr:hover { color: var(--text); }
+    .timer { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+    .res-box { margin-top: 12px; }
+    .res-status { font-size: 12px; font-weight: 700; margin-bottom: 5px; }
+    .res-ok { color: var(--green); } .res-err { color: var(--red); }
+    .res-box pre { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px; overflow: auto; max-height: 300px; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+    .note { font-size: 11px; color: var(--orange); padding: 8px 10px; background: rgba(210,153,34,0.08); border-radius: 4px; border-left: 3px solid var(--orange); line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🌱 FORAGRO v2.0 — API Explorer</h1>
+  <div class="hlinks">
+    <a href="/docs" target="_blank">Swagger UI</a>
+    <a href="/redoc" target="_blank">ReDoc</a>
+    <a href="/dashboard/" target="_blank">Dashboard</a>
+    <a href="/admin-panel/" target="_blank">Admin</a>
+  </div>
+  <span id="login-status">⚪ Sin sesión</span>
+</header>
+
+<div class="layout">
+<nav>
+  <div id="login-panel">
+    <h3>🔑 Iniciar Sesión</h3>
+    <input id="lp-user" type="text" placeholder="Usuario" value="admin" />
+    <input id="lp-pass" type="password" placeholder="Contraseña" />
+    <button onclick="doLogin()">Entrar al dashboard</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">🌾 Público (Kiosco)</div>
+  <a href="#s-public">WS /api/chat-ws</a>
+  <a href="#ep-chat">POST /api/chat</a>
+  <a href="#ep-tts">POST /api/tts</a>
+  <a href="#ep-products">GET /api/products</a>
+  <a href="#ep-disease">GET /api/disease-references</a>
+  <a href="#ep-weather">GET /api/weather</a>
+  <a href="#ep-soil">GET /api/soil</a>
+  <a href="#ep-lead">POST /api/lead</a>
+  <a href="#ep-offline">GET /api/offline-cache</a>
+  <div class="sep"></div>
+  <div class="grp">🔑 Auth</div>
+  <a href="#ep-login">POST /api/login</a>
+  <a href="#ep-logout">POST /api/logout</a>
+  <a href="#ep-session">GET /api/session</a>
+  <div class="sep"></div>
+  <div class="grp">📊 Dashboard CRM</div>
+  <a href="#ep-metrics">GET /api/metrics</a>
+  <a href="#ep-leads">GET /api/leads</a>
+  <a href="#ep-lead-detail">GET /api/leads/{id}</a>
+  <a href="#ep-lead-update">PUT /api/leads/{id}</a>
+  <a href="#ep-inventory">GET /api/inventory</a>
+  <a href="#ep-campaigns">GET /api/campaigns</a>
+  <a href="#ep-agronomo-stats">GET /api/agronomo-stats</a>
+  <div class="sep"></div>
+  <div class="grp">🏪 Puntos de Venta</div>
+  <a href="#ep-pdv-list">GET /api/pdv</a>
+  <a href="#ep-pdv-create">POST /api/pdv</a>
+  <a href="#ep-pdv-detail">GET /api/pdv/{id}</a>
+  <a href="#ep-pdv-metrics">GET /api/pdv/{id}/metrics</a>
+  <a href="#ep-pdv-assign">POST /api/pdv/{id}/agronomo</a>
+  <a href="#ep-agronomos">GET /api/agronomos</a>
+  <div class="sep"></div>
+  <div class="grp">⚙️ Admin</div>
+  <a href="#ep-admin-prod">POST /api/admin/products</a>
+  <a href="#ep-admin-disease">POST /api/admin/disease-references</a>
+  <a href="#ep-admin-metrics">GET /api/admin/metrics-custom</a>
+  <a href="#ep-admin-metric-c">POST /api/admin/metrics-custom</a>
+  <a href="#ep-admin-report">GET /api/admin/report</a>
+  <a href="#ep-admin-escaladas">GET /api/admin/escaladas</a>
+  <a href="#ep-admin-schema">GET /api/admin/schema-info</a>
+  <div class="sep"></div>
+  <div class="grp">📱 WhatsApp</div>
+  <a href="#ep-wa-convs">GET /api/whatsapp/conversations</a>
+  <a href="#ep-wa-history">GET /api/whatsapp/history/{tel}</a>
+</nav>
+
+<main>
+
+<!-- ═══ PUBLIC ═══════════════════════════════════════════════════════════ -->
+<div class="section" id="s-public">
+  <div class="sec-hdr">
+    <span class="tag tag-public">PUBLIC</span>
+    <div><h2>🌾 Kiosco POP — Endpoints Públicos</h2>
+    <div class="sec-desc">No requieren autenticación. Accesibles desde la tablet en el punto de venta.</div></div>
+  </div>
+
+  <div class="ep"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd WS">WS</span><span class="ep-path">/api/chat-ws</span>
+    <span class="ep-desc">Chat manos libres (tablet ↔ IA)</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body"><div class="note">WebSocket permanente — Conecta con: <code>ws://localhost:8000/api/chat-ws</code><br>
+    Protocolo: 1) envía <code>{"type":"init","pdv":"PRINCIPAL"}</code> → espera <code>{"type":"ready"}</code><br>
+    2) envía <code>{"type":"message","message":"Hola","cultivo":"Café","zona":"Francisco Morazán"}</code><br>
+    3) recibes <code>{"type":"response","reply":"...","audio":"&lt;base64 mp3&gt;","ui_actions":[...]}</code></div></div>
+  </div>
+
+  <div class="ep" id="ep-chat"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/chat</span>
+    <span class="ep-desc">Chat HTTP con IA (fallback del WebSocket)</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-chat">{"message":"Tengo problemas de Roya en mi cafetal, ¿qué me recomiendas?","cultivo":"Café","zona":"Francisco Morazán","punto_venta_id":"PRINCIPAL","context":[]}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/chat','b-chat','r-chat','t-chat')">▶ Ejecutar</button><button class="btn-clr" onclick="clr('r-chat')">Limpiar</button><span class="timer" id="t-chat"></span></div>
+      <div class="res-box" id="r-chat"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-tts"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/tts</span>
+    <span class="ep-desc">Síntesis de voz TTS → audio MP3</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-tts" rows="3">{"text":"Buenos días productor, bienvenido a FORAGRO.","voice":"onyx"}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rTts('b-tts','r-tts','t-tts')">▶ Ejecutar + Reproducir</button><span class="timer" id="t-tts"></span></div>
+      <div class="res-box" id="r-tts"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-products"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/products</span>
+    <span class="ep-desc">Catálogo con stock y precios en HNL</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="frow">
+        <div><label>cultivo (opcional)</label>
+        <select id="q-prod-cultivo"><option value="">— Todos —</option><option>Café</option><option>Maíz</option><option>Frijol</option><option>Plátano</option><option>Tomate</option><option>Papa</option></select></div>
+        <div><label>categoria (opcional)</label>
+        <select id="q-prod-cat"><option value="">— Todas —</option><option>Fungicida</option><option>Insecticida</option><option>Fertilizante Foliar</option><option>Bioestimulante</option><option>Biológico</option></select></div>
+      </div>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/products',{cultivo:g('q-prod-cultivo'),categoria:g('q-prod-cat')},'r-products','t-products')">▶ Ejecutar</button><button class="btn-clr" onclick="clr('r-products')">Limpiar</button><span class="timer" id="t-products"></span></div>
+      <div class="res-box" id="r-products"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-disease"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/disease-references</span>
+    <span class="ep-desc">Banco de fotos fitosanitarias de referencia</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>cultivo (opcional)</label>
+      <select id="q-disease-cultivo"><option value="">— Todos —</option><option>Café</option><option>Maíz</option><option>Frijol</option><option>Plátano</option></select>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/disease-references',{cultivo:g('q-disease-cultivo')},'r-disease','t-disease')">▶ Ejecutar</button><span class="timer" id="t-disease"></span></div>
+      <div class="res-box" id="r-disease"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-weather"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/weather</span>
+    <span class="ep-desc">Clima actual por zona/departamento de Honduras</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>zona</label>
+      <select id="q-weather-zona"><option>Francisco Morazán</option><option>Comayagua</option><option>Santa Bárbara</option><option>Cortés</option><option>Olancho</option><option>Copán</option><option>Lempira</option></select>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/weather',{zona:g('q-weather-zona')},'r-weather','t-weather')">▶ Ejecutar</button><span class="timer" id="t-weather"></span></div>
+      <div class="res-box" id="r-weather"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-soil"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/soil</span>
+    <span class="ep-desc">Tipo de suelo y pH por zona</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>zona</label>
+      <select id="q-soil-zona"><option>Francisco Morazán</option><option>Comayagua</option><option>Santa Bárbara</option><option>Olancho</option></select>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/soil',{zona:g('q-soil-zona')},'r-soil','t-soil')">▶ Ejecutar</button><span class="timer" id="t-soil"></span></div>
+      <div class="res-box" id="r-soil"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-lead"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/lead</span>
+    <span class="ep-desc">Registrar productor en CRM y generar cupón</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-lead" rows="10">{
+  "cultivo": "Café",
+  "zona": "Francisco Morazán",
+  "manzanas": "5",
+  "fecha_siembra": "2025-09",
+  "problema": "Roya",
+  "historial": "Primer año con el problema",
+  "canal": "Punto de venta",
+  "telefono": "99999999",
+  "nombre_productor": "Juan Pérez",
+  "punto_venta_id": "PRINCIPAL"
+}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/lead','b-lead','r-lead','t-lead')">▶ Ejecutar</button><button class="btn-clr" onclick="clr('r-lead')">Limpiar</button><span class="timer" id="t-lead"></span></div>
+      <div class="res-box" id="r-lead"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-offline"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/offline-cache</span>
+    <span class="ep-desc">Paquete de conocimiento para modo sin internet</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/offline-cache',{},'r-offline','t-offline')">▶ Ejecutar</button><span class="timer" id="t-offline"></span></div>
+      <div class="res-box" id="r-offline"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AUTH ══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-auth">
+  <div class="sec-hdr">
+    <span class="tag tag-auth">AUTH</span>
+    <div><h2>🔑 Autenticación</h2>
+    <div class="sec-desc">Usa el panel lateral izquierdo para iniciar sesión rápido antes de probar endpoints protegidos.</div></div>
+  </div>
+
+  <div class="ep" id="ep-login"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/login</span>
+    <span class="ep-desc">Iniciar sesión del dashboard</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-login" rows="3">{"username":"admin","password":"tu_contraseña"}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/login','b-login','r-login','t-login')">▶ Ejecutar</button><span class="timer" id="t-login"></span></div>
+      <div class="res-box" id="r-login"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-logout"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/logout</span>
+    <span class="ep-desc">Cerrar sesión activa</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/logout',{},'r-logout','t-logout','POST')">▶ Ejecutar</button><span class="timer" id="t-logout"></span></div>
+      <div class="res-box" id="r-logout"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-session"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/session</span>
+    <span class="ep-desc">🔒 Consultar usuario de la sesión activa</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/session',{},'r-session','t-session')">▶ Ejecutar</button><span class="timer" id="t-session"></span></div>
+      <div class="res-box" id="r-session"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ═════════════════════════════════════════════════════════ -->
+<div class="section" id="s-dashboard">
+  <div class="sec-hdr">
+    <span class="tag tag-dash">DASHBOARD</span>
+    <div><h2>📊 Dashboard CRM</h2>
+    <div class="sec-desc">🔒 Requiere sesión activa. Inicia sesión desde el panel izquierdo primero.</div></div>
+  </div>
+
+  <div class="ep" id="ep-metrics"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/metrics</span>
+    <span class="ep-desc">🔒 KPIs globales del sistema</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>pdv_id (opcional)</label><input id="q-metrics-pdv" type="number" placeholder="ej: 1" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/metrics',{pdv_id:g('q-metrics-pdv')},'r-metrics','t-metrics')">▶ Ejecutar</button><button class="btn-clr" onclick="clr('r-metrics')">Limpiar</button><span class="timer" id="t-metrics"></span></div>
+      <div class="res-box" id="r-metrics"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-leads"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/leads</span>
+    <span class="ep-desc">🔒 CRM de productores con filtros</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="frow">
+        <div><label>search</label><input id="q-leads-s" placeholder="teléfono, nombre..." /></div>
+        <div><label>cultivo</label><select id="q-leads-c"><option value="">— Todos —</option><option>Café</option><option>Maíz</option><option>Frijol</option><option>Tomate</option></select></div>
+      </div>
+      <div class="frow">
+        <div><label>estado</label><select id="q-leads-e"><option value="">— Todos —</option><option>Nuevo</option><option>Contactado</option><option>Visita Técnica Agendada</option><option>Venta Cerrada</option></select></div>
+        <div><label>limit</label><input id="q-leads-l" type="number" value="10" /></div>
+      </div>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/leads',{search:g('q-leads-s'),cultivo:g('q-leads-c'),estado:g('q-leads-e'),limit:g('q-leads-l')},'r-leads','t-leads')">▶ Ejecutar</button><button class="btn-clr" onclick="clr('r-leads')">Limpiar</button><span class="timer" id="t-leads"></span></div>
+      <div class="res-box" id="r-leads"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-lead-detail"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/leads/{lead_id}</span>
+    <span class="ep-desc">🔒 Detalle del productor con historial completo</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>lead_id</label><input id="q-lead-id" type="number" placeholder="ej: 1" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/leads/'+g('q-lead-id'),{},'r-lead-detail','t-lead-detail')">▶ Ejecutar</button><span class="timer" id="t-lead-detail"></span></div>
+      <div class="res-box" id="r-lead-detail"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-lead-update"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd PUT">PUT</span><span class="ep-path">/api/leads/{lead_id}</span>
+    <span class="ep-desc">🔒 Actualizar estado, notas y agrónomo asignado</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>lead_id</label><input id="q-lead-upd-id" type="number" placeholder="ej: 1" />
+      <label>Body JSON</label>
+      <textarea id="b-lead-upd" rows="5">{"estado_seguimiento":"Contactado","notas_seguimiento":"Llamada realizada, interesado en visita técnica.","agronomo_asignado":"Ing. Carlos López"}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('PUT','/api/leads/'+g('q-lead-upd-id'),'b-lead-upd','r-lead-upd','t-lead-upd')">▶ Ejecutar</button><span class="timer" id="t-lead-upd"></span></div>
+      <div class="res-box" id="r-lead-upd"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-inventory"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/inventory</span>
+    <span class="ep-desc">🔒 Inventario completo de bodega</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/inventory',{},'r-inventory','t-inventory')">▶ Ejecutar</button><span class="timer" id="t-inventory"></span></div>
+      <div class="res-box" id="r-inventory"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-campaigns"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/campaigns</span>
+    <span class="ep-desc">🔒 Rendimiento por canal publicitario</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/campaigns',{},'r-campaigns','t-campaigns')">▶ Ejecutar</button><span class="timer" id="t-campaigns"></span></div>
+      <div class="res-box" id="r-campaigns"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-agronomo-stats"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/agronomo-stats</span>
+    <span class="ep-desc">🔒 Estadísticas de desempeño por agrónomo</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/agronomo-stats',{},'r-agro-stats','t-agro-stats')">▶ Ejecutar</button><span class="timer" id="t-agro-stats"></span></div>
+      <div class="res-box" id="r-agro-stats"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PDV ═══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-pdv">
+  <div class="sec-hdr">
+    <span class="tag tag-pdv">PDV</span>
+    <div><h2>🏪 Puntos de Venta</h2>
+    <div class="sec-desc">🔒 Gestión de sucursales y asignación de agrónomos.</div></div>
+  </div>
+
+  <div class="ep" id="ep-pdv-list"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/pdv</span>
+    <span class="ep-desc">🔒 Listar todos los Puntos de Venta</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/pdv',{},'r-pdv-list','t-pdv-list')">▶ Ejecutar</button><span class="timer" id="t-pdv-list"></span></div>
+      <div class="res-box" id="r-pdv-list"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-pdv-create"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/pdv</span>
+    <span class="ep-desc">🔒 Crear nuevo Punto de Venta</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-pdv-create" rows="7">{
+  "codigo": "TEGUCIGALPA_01",
+  "nombre": "FORAGRO Tegucigalpa Centro",
+  "municipio": "Tegucigalpa",
+  "departamento": "Francisco Morazán",
+  "direccion": "Blvd. Morazán, Local 15",
+  "telefono": "2222-3333"
+}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/pdv','b-pdv-create','r-pdv-create','t-pdv-create')">▶ Ejecutar</button><span class="timer" id="t-pdv-create"></span></div>
+      <div class="res-box" id="r-pdv-create"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-pdv-detail"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/pdv/{pdv_id}</span>
+    <span class="ep-desc">🔒 Detalle del PDV con agrónomos asignados</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>pdv_id</label><input id="q-pdv-did" type="number" placeholder="ej: 1" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/pdv/'+g('q-pdv-did'),{},'r-pdv-detail','t-pdv-detail')">▶ Ejecutar</button><span class="timer" id="t-pdv-detail"></span></div>
+      <div class="res-box" id="r-pdv-detail"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-pdv-metrics"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/pdv/{pdv_id}/metrics</span>
+    <span class="ep-desc">🔒 KPIs detallados de un PDV específico</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>pdv_id</label><input id="q-pdv-mid" type="number" placeholder="ej: 1" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/pdv/'+g('q-pdv-mid')+'/metrics',{},'r-pdv-metrics','t-pdv-metrics')">▶ Ejecutar</button><span class="timer" id="t-pdv-metrics"></span></div>
+      <div class="res-box" id="r-pdv-metrics"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-pdv-assign"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/pdv/{pdv_id}/agronomo</span>
+    <span class="ep-desc">🔒 Asignar agrónomo a un PDV</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>pdv_id</label><input id="q-pdv-aid" type="number" placeholder="ej: 1" />
+      <label>Body JSON</label>
+      <textarea id="b-pdv-assign" rows="3">{"user_id":1,"es_responsable":true}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/pdv/'+g('q-pdv-aid')+'/agronomo','b-pdv-assign','r-pdv-assign','t-pdv-assign')">▶ Ejecutar</button><span class="timer" id="t-pdv-assign"></span></div>
+      <div class="res-box" id="r-pdv-assign"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-agronomos"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/agronomos</span>
+    <span class="ep-desc">🔒 Listar todos los usuarios/agrónomos</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/agronomos',{},'r-agronomos','t-agronomos')">▶ Ejecutar</button><span class="timer" id="t-agronomos"></span></div>
+      <div class="res-box" id="r-agronomos"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN ══════════════════════════════════════════════════════════════ -->
+<div class="section" id="s-admin">
+  <div class="sec-hdr">
+    <span class="tag tag-admin">ADMIN</span>
+    <div><h2>⚙️ Panel Admin</h2>
+    <div class="sec-desc">🔒 Gestión del catálogo, reportes y bandeja de escaladas.</div></div>
+  </div>
+
+  <div class="ep" id="ep-admin-prod"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/admin/products</span>
+    <span class="ep-desc">🔒 Crear producto en el catálogo</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-admin-prod" rows="11">{
+  "sku": "FUNG-001",
+  "nombre": "Oxicloruro de Cobre 50 WP",
+  "categoria": "Fungicida",
+  "ingrediente_activo": "Oxicloruro de Cobre 50%",
+  "cultivos": "Café,Tomate,Papa",
+  "problemas": "Roya,Antracnosis,Tizón",
+  "dosis": "300-400 g/100L agua",
+  "precio_hnl": 180.0,
+  "stock": 50,
+  "unidad": "Kilogramo"
+}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/admin/products','b-admin-prod','r-admin-prod','t-admin-prod')">▶ Ejecutar</button><span class="timer" id="t-admin-prod"></span></div>
+      <div class="res-box" id="r-admin-prod"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-disease"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/admin/disease-references</span>
+    <span class="ep-desc">🔒 Agregar referencia fitosanitaria con foto</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-admin-disease" rows="8">{
+  "cultivo": "Café",
+  "problema": "Hongo",
+  "nombre_enfermedad": "Roya del Café",
+  "nombre_cientifico": "Hemileia vastatrix",
+  "descripcion_sintomas": "Manchas amarillas en haz con polvillo naranja en envés.",
+  "foto_url": "https://ejemplo.com/roya_cafe.jpg",
+  "productos_recomendados_ids": "1,2,3"
+}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/admin/disease-references','b-admin-disease','r-admin-disease','t-admin-disease')">▶ Ejecutar</button><span class="timer" id="t-admin-disease"></span></div>
+      <div class="res-box" id="r-admin-disease"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-metrics"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/admin/metrics-custom</span>
+    <span class="ep-desc">🔒 Listar métricas personalizadas configuradas</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/admin/metrics-custom',{},'r-admin-metrics','t-admin-metrics')">▶ Ejecutar</button><span class="timer" id="t-admin-metrics"></span></div>
+      <div class="res-box" id="r-admin-metrics"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-metric-c"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd POST">POST</span><span class="ep-path">/api/admin/metrics-custom</span>
+    <span class="ep-desc">🔒 Crear nueva métrica personalizada</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>Body JSON</label>
+      <textarea id="b-admin-metric" rows="8">{
+  "nombre": "Leads por Cultivo (30 días)",
+  "descripcion": "Productores atendidos por tipo de cultivo",
+  "tipo_grafico": "bar",
+  "dimension": "cultivo",
+  "metrica": "leads",
+  "filtro_fecha": "30d",
+  "orden": 1
+}</textarea>
+      <div class="actions"><button class="btn-run" onclick="rJson('POST','/api/admin/metrics-custom','b-admin-metric','r-admin-metric-c','t-admin-metric-c')">▶ Ejecutar</button><span class="timer" id="t-admin-metric-c"></span></div>
+      <div class="res-box" id="r-admin-metric-c"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-report"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/admin/report</span>
+    <span class="ep-desc">🔒 Reporte dinámico exportable (JSON o CSV)</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="frow">
+        <div><label>tipo</label><select id="q-report-tipo"><option>leads</option><option>products</option><option>escaladas</option><option>whatsapp</option></select></div>
+        <div><label>formato</label><select id="q-report-fmt"><option>json</option><option>csv</option></select></div>
+      </div>
+      <label>dias</label><input id="q-report-dias" type="number" value="30" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/admin/report',{tipo:g('q-report-tipo'),formato:g('q-report-fmt'),dias:g('q-report-dias')},'r-report','t-report')">▶ Ejecutar</button><span class="timer" id="t-report"></span></div>
+      <div class="res-box" id="r-report"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-escaladas"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/admin/escaladas</span>
+    <span class="ep-desc">🔒 Bandeja de escaladas IA → agrónomo</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>estado (opcional)</label>
+      <select id="q-esc-estado"><option value="">— Todos —</option><option value="pendiente">pendiente</option><option value="respondida">respondida</option><option value="ignorada">ignorada</option></select>
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/admin/escaladas',{estado:g('q-esc-estado')},'r-escaladas','t-escaladas')">▶ Ejecutar</button><span class="timer" id="t-escaladas"></span></div>
+      <div class="res-box" id="r-escaladas"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-admin-schema"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/admin/schema-info</span>
+    <span class="ep-desc">🔒 Dimensiones y métricas disponibles para configurar</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/admin/schema-info',{},'r-schema','t-schema')">▶ Ejecutar</button><span class="timer" id="t-schema"></span></div>
+      <div class="res-box" id="r-schema"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ WHATSAPP ═══════════════════════════════════════════════════════════ -->
+<div class="section" id="s-whatsapp">
+  <div class="sec-hdr">
+    <span class="tag tag-wa">WHATSAPP</span>
+    <div><h2>📱 WhatsApp</h2>
+    <div class="sec-desc">🔒 Historial y lista de conversaciones del canal WhatsApp.</div></div>
+  </div>
+
+  <div class="ep" id="ep-wa-convs"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/whatsapp/conversations</span>
+    <span class="ep-desc">🔒 Lista de conversaciones agrupadas por teléfono</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/whatsapp/conversations',{},'r-wa-convs','t-wa-convs')">▶ Ejecutar</button><span class="timer" id="t-wa-convs"></span></div>
+      <div class="res-box" id="r-wa-convs"></div>
+    </div>
+  </div>
+
+  <div class="ep" id="ep-wa-history"><div class="ep-hdr" onclick="tog(this)">
+    <span class="mtd GET">GET</span><span class="ep-path">/api/whatsapp/history/{telefono}</span>
+    <span class="ep-desc">🔒 Historial de conversación por número de teléfono</span><span class="ep-chev">▶</span></div>
+    <div class="ep-body">
+      <label>telefono (con código de país, ej: 50499999999)</label><input id="q-wa-tel" placeholder="50499999999" />
+      <div class="actions"><button class="btn-run" onclick="rGet('/api/whatsapp/history/'+g('q-wa-tel'),{},'r-wa-history','t-wa-history')">▶ Ejecutar</button><span class="timer" id="t-wa-history"></span></div>
+      <div class="res-box" id="r-wa-history"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+const API = window.location.origin;
+const g = id => { const el = document.getElementById(id); return el ? (el.value||'').trim() : ''; };
+const clr = id => { document.getElementById(id).innerHTML = ''; };
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function tog(hdr) {
+  const body = hdr.nextElementSibling;
+  const chev = hdr.querySelector('.ep-chev');
+  const open = body.classList.toggle('open');
+  chev.classList.toggle('open', open);
+}
+
+function show(resId, timId, status, data, ms) {
+  const box = document.getElementById(resId);
+  if (timId) { const t = document.getElementById(timId); if(t) t.textContent = ms ? ms+'ms' : ''; }
+  const ok = status >= 200 && status < 300;
+  const body = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  box.innerHTML = `<div class="res-status ${ok?'res-ok':'res-err'}">${ok?'✅':'❌'} HTTP ${status}</div><pre>${esc(body)}</pre>`;
+}
+
+function mkUrl(path, params) {
+  const p = Object.fromEntries(Object.entries(params).filter(([,v]) => v !== '' && v != null));
+  const q = new URLSearchParams(p).toString();
+  return API + path + (q ? '?'+q : '');
+}
+
+async function rGet(path, params, resId, timId, method='GET') {
+  document.getElementById(resId).innerHTML = '<div class="res-status">⏳ Ejecutando...</div>';
+  const t0 = Date.now();
+  try {
+    const r = await fetch(mkUrl(path, params), { method, credentials:'include', headers: method!=='GET' ? {'Content-Type':'application/json'} : {} });
+    const ms = Date.now()-t0;
+    const ct = r.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await r.json() : await r.text();
+    show(resId, timId, r.status, data, ms);
+  } catch(e) { show(resId, timId, 0, {error: e.message}, null); }
+}
+
+async function rJson(method, path, bodyId, resId, timId) {
+  document.getElementById(resId).innerHTML = '<div class="res-status">⏳ Ejecutando...</div>';
+  let body;
+  try { body = JSON.parse(document.getElementById(bodyId).value); }
+  catch(e) { show(resId, null, 400, {error:'JSON inválido: '+e.message}, null); return; }
+  const t0 = Date.now();
+  try {
+    const r = await fetch(API+path, { method, credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const ms = Date.now()-t0;
+    const ct = r.headers.get('content-type')||'';
+    const data = ct.includes('json') ? await r.json() : await r.text();
+    show(resId, timId, r.status, data, ms);
+  } catch(e) { show(resId, timId, 0, {error: e.message}, null); }
+}
+
+async function rTts(bodyId, resId, timId) {
+  document.getElementById(resId).innerHTML = '<div class="res-status">⏳ Generando audio...</div>';
+  let body;
+  try { body = JSON.parse(document.getElementById(bodyId).value); }
+  catch(e) { document.getElementById(resId).innerHTML='<div class="res-status res-err">JSON inválido</div>'; return; }
+  const t0 = Date.now();
+  try {
+    const r = await fetch(API+'/api/tts', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const ms = Date.now()-t0;
+    const t = document.getElementById(timId); if(t) t.textContent = ms+'ms';
+    if (!r.ok) { const err = await r.json().catch(()=>({detail:'Error'})); show(resId,null,r.status,err,null); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    document.getElementById(resId).innerHTML = `<div class="res-status res-ok">✅ HTTP ${r.status} — Audio generado (${ms}ms)</div><audio controls autoplay src="${url}" style="width:100%;margin-top:8px"></audio>`;
+  } catch(e) { document.getElementById(resId).innerHTML=`<div class="res-status res-err">❌ ${esc(e.message)}</div>`; }
+}
+
+async function doLogin() {
+  const user = document.getElementById('lp-user').value;
+  const pass = document.getElementById('lp-pass').value;
+  const st = document.getElementById('login-status');
+  st.textContent = '⏳...'; st.className = '';
+  try {
+    const r = await fetch(API+'/api/login', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:user,password:pass}) });
+    const d = await r.json();
+    if (r.ok) { st.textContent = '✅ '+d.username; st.className = 'logged'; }
+    else { st.textContent = '❌ '+(d.detail||'Error'); }
+  } catch(e) { st.textContent = '❌ Sin conexión'; }
+}
+
+// Highlight nav on scroll
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('nav a').forEach(a => {
+    const id = a.getAttribute('href').replace('#','');
+    const el = document.getElementById(id);
+    if (el) { const rect = el.getBoundingClientRect(); a.classList.toggle('active', rect.top <= 80 && rect.bottom > 80); }
+  });
+}, {passive:true});
+</script>
+</body>
+</html>
