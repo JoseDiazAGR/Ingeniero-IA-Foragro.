@@ -13,6 +13,11 @@ class KioskController {
         this.isOnline = navigator.onLine;
         this.heartbeatTimer = null;
         this.isConsultationActive = false;
+
+        // Control de habla y anti-eco (Barge-in / Interrupción)
+        this.isSpeaking = false;
+        this.currentAudio = null;
+        this.currentSpeakingText = "";
         
         // DOM Elements
         this.idleScreen = document.getElementById('idle-screen');
@@ -41,6 +46,16 @@ class KioskController {
         }
         if (this.btnReset) {
             this.btnReset.addEventListener('click', () => this.resetToIdle());
+        }
+        // Permitir interrumpir la voz del bot tocando la pantalla
+        if (this.activeScreen) {
+            this.activeScreen.addEventListener('click', (e) => {
+                if (this.isSpeaking && e.target !== this.btnReset && !this.btnReset?.contains(e.target)) {
+                    console.log("🛑 Cliente interrumpió al Agrobot tocando la pantalla.");
+                    this.stopAudioPlayback();
+                    this.updateStatus("Listo para hablar");
+                }
+            });
         }
     }
 
@@ -81,11 +96,9 @@ class KioskController {
         if (overlay) overlay.classList.add('hidden');
 
         // Detener micrófono y audio
+        this.stopAudioPlayback();
         if (this.recognition) {
             try { this.recognition.stop(); } catch(e){}
-        }
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
         }
         this.updateMicState(false);
     }
@@ -176,7 +189,7 @@ class KioskController {
                 this.handleUiActions(data.ui_actions);
                 
                 if (data.audio) {
-                    this.playAudio(data.audio);
+                    this.playAudio(data.audio, data.reply);
                 } else {
                     this.speakNative(data.reply);
                 }
@@ -207,24 +220,119 @@ class KioskController {
         }
     }
 
-    playAudio(base64Audio) {
+    stopAudioPlayback() {
+        if (this.currentAudio) {
+            try {
+                this.currentAudio.pause();
+                this.currentAudio.currentTime = 0;
+            } catch (e) {}
+            this.currentAudio = null;
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        this.isSpeaking = false;
+        this.currentSpeakingText = "";
+    }
+
+    isEchoOfBot(transcript) {
+        if (!this.currentSpeakingText) return false;
+
+        const clean = (s) => (s || '')
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const cleanTranscript = clean(transcript);
+        const cleanBot = clean(this.currentSpeakingText);
+
+        if (!cleanTranscript) return true;
+
+        // 1. Coincidencia directa por subcadena
+        if (cleanBot.includes(cleanTranscript)) {
+            return true;
+        }
+
+        // 2. Coincidencia por conjunto de palabras (si >50% de las palabras provienen de lo que el bot está diciendo)
+        const transcriptWords = cleanTranscript.split(" ").filter(w => w.length > 2);
+        if (transcriptWords.length === 0) return true;
+
+        const botWords = new Set(cleanBot.split(" ").filter(w => w.length > 2));
+        let matchCount = 0;
+        for (const w of transcriptWords) {
+            if (botWords.has(w)) matchCount++;
+        }
+
+        return (matchCount / transcriptWords.length) >= 0.5;
+    }
+
+    playAudio(base64Audio, replyText = "") {
+        this.stopAudioPlayback();
+        this.isSpeaking = true;
+        this.currentSpeakingText = replyText;
+
         try {
             const audio = new Audio("data:audio/mpeg;base64," + base64Audio);
+            this.currentAudio = audio;
+
+            audio.onplay = () => {
+                this.isSpeaking = true;
+            };
+
+            audio.onended = () => {
+                this.currentAudio = null;
+                // Margen de 400ms para disipar cualquier reverberación acústica en el micrófono
+                setTimeout(() => {
+                    this.isSpeaking = false;
+                    this.currentSpeakingText = "";
+                }, 400);
+            };
+
+            audio.onerror = () => {
+                this.isSpeaking = false;
+                this.currentSpeakingText = "";
+            };
+
             audio.play().catch(e => {
                 console.warn("Autoplay bloqueado:", e);
+                this.isSpeaking = false;
             });
         } catch (e) {
             console.error("Error reproduciendo audio:", e);
+            this.isSpeaking = false;
         }
     }
 
     speakNative(text) {
+        this.stopAudioPlayback();
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
+            this.isSpeaking = true;
+            this.currentSpeakingText = text;
+
             const cleanText = text.replace(/[*_#]/g, '');
             const utterance = new SpeechSynthesisUtterance(cleanText);
             utterance.lang = 'es-HN';
             utterance.rate = 1.0;
+
+            utterance.onstart = () => {
+                this.isSpeaking = true;
+            };
+
+            utterance.onend = () => {
+                setTimeout(() => {
+                    this.isSpeaking = false;
+                    this.currentSpeakingText = "";
+                }, 400);
+            };
+
+            utterance.onerror = () => {
+                this.isSpeaking = false;
+                this.currentSpeakingText = "";
+            };
+
             window.speechSynthesis.speak(utterance);
         }
     }
@@ -245,6 +353,19 @@ class KioskController {
         this.recognition.onresult = (event) => {
             const transcript = event.results[event.results.length - 1][0].transcript.trim();
             if (!transcript) return;
+
+            // --- FILTRO ANTI-ECO Y BARGE-IN (INTERRUPCIÓN) ---
+            if (this.isSpeaking) {
+                if (this.isEchoOfBot(transcript)) {
+                    console.log("🔇 Eco del Agrobot descartado (no procesar):", transcript);
+                    return;
+                }
+                // Si el cliente dijo algo diferente, se detiene el habla inmediatamente
+                console.log("🛑 Interrupción por voz detectada del cliente:", transcript);
+                this.stopAudioPlayback();
+                this.updateStatus("Interrumpido - Procesando...");
+            }
+
             console.log("🎤 Reconocido:", transcript);
             this.appendMessage('user', transcript);
             this.sendMessage(transcript);
@@ -257,7 +378,11 @@ class KioskController {
         };
 
         if (this.btnMic) {
-            this.btnMic.addEventListener('click', () => {
+            this.btnMic.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.isSpeaking) {
+                    this.stopAudioPlayback();
+                }
                 if (this.btnMic.classList.contains('active')) {
                     this.updateMicState(false);
                     this.recognition.stop();
