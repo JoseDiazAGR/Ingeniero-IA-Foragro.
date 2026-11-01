@@ -190,61 +190,152 @@ AGRO_TOOLS: List[Dict[str, Any]] = [
 # Cada función es independiente y testeable de forma aislada.
 # ---------------------------------------------------------------------------
 
+import unicodedata as _unicodedata
+
+
+def _normalize_str(s: str) -> str:
+    """Quita tildes y pone en minúsculas: 'Café' == 'cafe' == 'CAFE'."""
+    return _unicodedata.normalize("NFD", s or "").encode("ascii", "ignore").decode().lower().strip()
+
+
+_STOPWORDS = {"del", "de", "la", "el", "los", "las", "en", "por", "con", "para", "un", "una"}
+
+_CROP_ALIASES = {
+    "papa": "tomate",
+    "chile": "tomate",
+    "hortaliza": "tomate",
+    "hortalizas": "tomate",
+    "banano": "platano",
+    "guineo": "platano",
+    "musacea": "platano",
+    "pasto": "otro",
+    "pastos": "otro",
+    "potrero": "otro",
+    "potreros": "otro",
+    "ganaderia": "otro",
+}
+
+
+def _extract_tokens(text: str) -> List[str]:
+    norm = _normalize_str(text)
+    return [t for t in norm.replace(",", " ").split() if len(t) >= 3 and t not in _STOPWORDS]
+
+
 def _tool_consultar_inventario(
     cultivo: str, problema: str = "", categoria: str = ""
 ) -> dict:
+    norm_cultivo = _normalize_str(cultivo)
+    prob_tokens = _extract_tokens(problema)
+    norm_cat = _normalize_str(categoria)
+
     with get_db() as conn:
-        query = (
-            "SELECT id, sku, nombre, categoria, ingrediente_activo, dosis, "
-            "precio_hnl, stock, unidad, descripcion FROM products WHERE 1=1"
-        )
-        params = []
-        if cultivo:
-            query += " AND (cultivos LIKE %s OR cultivos LIKE '%%Todos%%')"
-            params.append(f"%{cultivo}%")
-        if problema:
-            query += " AND problemas LIKE %s"
-            params.append(f"%{problema}%")
-        if categoria:
-            query += " AND categoria LIKE %s"
-            params.append(f"%{categoria}%")
-        query += " ORDER BY stock DESC LIMIT 6"
-        rows = conn.execute(query, params).fetchall()
-
-        # Fallback: solo por cultivo si no hubo resultados
-        if not rows and cultivo:
-            rows = conn.execute(
-                "SELECT id, sku, nombre, categoria, ingrediente_activo, dosis, "
-                "precio_hnl, stock, unidad, descripcion FROM products "
-                "WHERE cultivos LIKE %s LIMIT 4",
-                (f"%{cultivo}%",),
+        all_rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, sku, nombre, categoria, ingrediente_activo, cultivos, problemas, "
+                "dosis, precio_hnl, stock, unidad, descripcion FROM products ORDER BY stock DESC"
             ).fetchall()
+        ]
 
-    return {"encontrados": len(rows), "productos": [dict(r) for r in rows]}
+    def _matches_crop(p_cultivos: str) -> bool:
+        if not norm_cultivo:
+            return True
+        nc = _normalize_str(p_cultivos)
+        if norm_cultivo in nc or "todos" in nc:
+            return True
+        alias = _CROP_ALIASES.get(norm_cultivo)
+        if alias and alias in nc:
+            return True
+        return any(tok in nc for tok in _extract_tokens(cultivo))
+
+    def _prob_score(p: dict) -> int:
+        if not prob_tokens:
+            return 1
+        haystack = _normalize_str(f"{p.get('problemas', '')} {p.get('nombre', '')} {p.get('descripcion', '')}")
+        return sum(1 for tok in prob_tokens if tok in haystack)
+
+    filtered = []
+    for p in all_rows:
+        if not _matches_crop(p.get("cultivos", "")):
+            continue
+        if norm_cat and norm_cat not in _normalize_str(p.get("categoria", "")):
+            continue
+        score = _prob_score(p)
+        if score > 0:
+            filtered.append((score, p))
+
+    #Ordenar por mayor coincidencia con el problema y luego mayor stock
+    filtered.sort(key=lambda item: (item[0], item[1].get("stock", 0)), reverse=True)
+    matched = [item[1] for item in filtered[:6]]
+
+    # Fallback: solo por cultivo si el filtro de problema/categoría no arrojó resultados
+    if not matched and norm_cultivo:
+        matched = [p for p in all_rows if _matches_crop(p.get("cultivos", ""))][:4]
+
+    # Limpiar campos internos de filtro si no se requieren o conservarlos completos
+    return {"encontrados": len(matched), "productos": matched}
 
 
 def _tool_mostrar_fotos_referencia(cultivo: str, problema: str = "") -> dict:
-    with get_db() as conn:
-        query = (
-            "SELECT id, cultivo, problema, nombre_enfermedad, nombre_cientifico, "
-            "descripcion_sintomas, foto_url, productos_recomendados_ids "
-            "FROM disease_references WHERE cultivo LIKE %s"
-        )
-        params = [f"%{cultivo}%"]
-        if problema:
-            query += " AND (problema LIKE %s OR nombre_enfermedad LIKE %s OR descripcion_sintomas LIKE %s)"
-            params.extend([f"%{problema}%", f"%{problema}%", f"%{problema}%"])
-        rows = conn.execute(query, params).fetchall()
+    norm_cultivo = _normalize_str(cultivo)
+    norm_prob = _normalize_str(problema)
+    prob_tokens = [
+        t for t in _extract_tokens(problema)
+        if t not in {"enfermedad", "enfermedades", "plaga", "plagas", "hongo", "insecto", "dano", "sintoma", "sintomas"}
+    ]
 
-        if not rows:
-            rows = conn.execute(
+    with get_db() as conn:
+        all_refs = [
+            dict(r)
+            for r in conn.execute(
                 "SELECT id, cultivo, problema, nombre_enfermedad, nombre_cientifico, "
                 "descripcion_sintomas, foto_url, productos_recomendados_ids "
-                "FROM disease_references WHERE cultivo LIKE %s",
-                (f"%{cultivo}%",),
+                "FROM disease_references ORDER BY id ASC"
             ).fetchall()
+        ]
 
-    return {"total_fotos": len(rows), "referencias": [dict(r) for r in rows]}
+    # 1. Si el usuario/IA especificó una enfermedad o plaga concreta (ej: "roya", "ojo de gallo", "cogollero", "babosa"),
+    # priorizar coincidencia directa en nombre_enfermedad o nombre_cientifico.
+    if prob_tokens:
+        direct_matches = []
+        for r in all_refs:
+            name_haystack = _normalize_str(f"{r.get('nombre_enfermedad', '')} {r.get('nombre_cientifico', '')}")
+            score = sum(2 for tok in prob_tokens if tok in name_haystack)
+            if score == 0:
+                symp_haystack = _normalize_str(r.get("descripcion_sintomas", ""))
+                score = sum(1 for tok in prob_tokens if tok in symp_haystack)
+            if score > 0:
+                # Bonificar si además coincide el cultivo
+                rc = _normalize_str(r.get("cultivo", ""))
+                if norm_cultivo and (norm_cultivo in rc or _CROP_ALIASES.get(norm_cultivo, "") in rc):
+                    score += 3
+                direct_matches.append((score, r))
+
+        if direct_matches:
+            direct_matches.sort(key=lambda x: x[0], reverse=True)
+            best_score = direct_matches[0][0]
+            # Si hay coincidencia exacta por nombre de enfermedad, devolver solo las relevantes
+            selected = [r for sc, r in direct_matches if sc >= max(2, best_score - 1)]
+            return {"total_fotos": len(selected), "referencias": selected}
+
+    # 2. Filtrar por cultivo (y tipo general de problema: "Plagas" / "Enfermedad")
+    crop_target = _CROP_ALIASES.get(norm_cultivo, norm_cultivo)
+    crop_matches = [
+        r for r in all_refs
+        if not crop_target or crop_target in _normalize_str(r.get("cultivo", ""))
+    ]
+
+    if norm_prob in ("plaga", "plagas"):
+        filtered_type = [r for r in crop_matches if _normalize_str(r.get("problema", "")) == "plagas"]
+        if filtered_type:
+            crop_matches = filtered_type
+    elif norm_prob in ("enfermedad", "enfermedades"):
+        filtered_type = [r for r in crop_matches if _normalize_str(r.get("problema", "")) == "enfermedad"]
+        if filtered_type:
+            crop_matches = filtered_type
+
+    return {"total_fotos": len(crop_matches), "referencias": crop_matches}
+
 
 
 def _tool_obtener_datos_agronomicos(zona: str) -> dict:
@@ -378,17 +469,6 @@ async def _tool_escalar_a_agronomo(
 
 
 # ---------------------------------------------------------------------------
-# Utilidad: normalización de strings para comparación sin tildes
-# ---------------------------------------------------------------------------
-import unicodedata as _unicodedata
-
-
-def _normalize_str(s: str) -> str:
-    """Quita tildes y pone en minúsculas: 'Café' == 'cafe' == 'CAFE'."""
-    return _unicodedata.normalize("NFD", s or "").encode("ascii", "ignore").decode().lower()
-
-
-# ---------------------------------------------------------------------------
 # Fallback local con conocimiento base (sin internet / sin API key)
 # ---------------------------------------------------------------------------
 
@@ -475,9 +555,12 @@ async def chat_with_openai(
 
     safe_context = [
         {"role": m.get("role"), "content": str(m.get("content", ""))[:2000]}
-        for m in (context or [])[-12:]
+        for m in (context or [])[-20:]
         if m.get("role") in ("user", "assistant")
     ]
+    # El WebSocket agrega el turno actual al historial antes de llamar: no duplicarlo.
+    if safe_context and safe_context[-1]["role"] == "user" and safe_context[-1]["content"].strip() == message[:2000].strip():
+        safe_context.pop()
 
     system_content = SYSTEM_PROMPT
     if cultivo:
@@ -731,18 +814,17 @@ async def analyze_image(file: UploadFile, cultivo: str = "") -> dict:
             diagnosis = response.json()["choices"][0]["message"]["content"]
 
         # Buscar productos en inventario según diagnóstico
-        matched_products = []
-        with get_db() as conn:
-            keywords = ["Roya", "Broca", "Antracnosis", "Cogollero", "Sigatoka", "Tizón", "Fungicida", "Insecticida"]
-            detected = [k for k in keywords if k.lower() in diagnosis.lower()]
-            if detected:
-                rows = conn.execute(
-                    "SELECT id, sku, nombre, categoria, ingrediente_activo, dosis, "
-                    "precio_hnl, stock, unidad FROM products "
-                    "WHERE problemas LIKE ? OR categoria LIKE ? LIMIT 3",
-                    (f"%{detected[0]}%", f"%{detected[0]}%"),
-                ).fetchall()
-                matched_products = [dict(r) for r in rows]
+        keywords = [
+            "Roya", "Broca", "Ojo de gallo", "Mancha de hierro",
+            "Cogollero", "Mancha de asfalto", "Gallina ciega",
+            "Antracnosis", "Babosa", "Sigatoka", "Picudo",
+            "Tizón", "Moho gris", "Mosca blanca", "Salivazo",
+        ]
+        norm_diag = _normalize_str(diagnosis)
+        detected = [k for k in keywords if _normalize_str(k) in norm_diag]
+        prob_query = detected[0] if detected else ""
+        inv = _tool_consultar_inventario(cultivo or "", prob_query)
+        matched_products = inv.get("productos", [])[:3]
 
         return {
             "diagnosis": diagnosis,

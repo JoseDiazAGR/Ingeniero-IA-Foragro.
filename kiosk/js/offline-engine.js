@@ -30,27 +30,33 @@ class OfflineEngine {
             };
         }
 
-        const msgLower = message.toLowerCase();
-        
+        const norm = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const msgNorm = norm(message);
+
         // 1. Detectar cultivo
         let detectedCultivo = currentCultivo;
         for (const c of this.data.cultivos) {
-            if (msgLower.includes(c.toLowerCase())) {
+            if (msgNorm.includes(norm(c))) {
                 detectedCultivo = c;
                 break;
             }
         }
-        if (!detectedCultivo) detectedCultivo = "Café"; // Fallback default
+        if (!detectedCultivo) detectedCultivo = "Café";
 
-        // 2. Detectar problema
+        // 2. Detectar problema específico
         let detectedProblema = null;
         const keywords = {
-            "roya": "Roya", "broca": "Broca", "cogollero": "Cogollero",
-            "antracnosis": "Antracnosis", "sigatoka": "Sigatoka",
-            "tizón": "Tizón", "plaga": "Plagas", "enfermedad": "Enfermedad"
+            "roya": "Roya", "broca": "Broca", "ojo de gallo": "Ojo de Gallo",
+            "mancha de hierro": "Mancha de Hierro", "cogollero": "Cogollero",
+            "mancha de asfalto": "Mancha de Asfalto", "gallina ciega": "Gallina Ciega",
+            "antracnosis": "Antracnosis", "babosa": "Babosa", "mancha angular": "Mancha Angular",
+            "sigatoka": "Sigatoka", "picudo": "Picudo", "tizon tardio": "Tizón Tardío",
+            "tizon temprano": "Tizón Temprano", "tizon": "Tizón", "moho gris": "Moho Gris",
+            "mosca blanca": "Mosca Blanca", "salivazo": "Salivazo",
+            "plaga": "Plagas", "enfermedad": "Enfermedad"
         };
         for (const [kw, prob] of Object.entries(keywords)) {
-            if (msgLower.includes(kw)) {
+            if (msgNorm.includes(kw)) {
                 detectedProblema = prob;
                 break;
             }
@@ -58,20 +64,31 @@ class OfflineEngine {
 
         const ui_actions = [];
 
-        // 3. Buscar fotos de referencia
-        let referencias = this.data.disease_references.filter(r => r.cultivo === detectedCultivo);
+        // 3. Buscar fotos de referencia (coincidencia exacta por nombre_enfermedad primero)
+        let referencias = this.data.disease_references.filter(r => norm(r.cultivo) === norm(detectedCultivo));
         if (detectedProblema) {
-            const filtered = referencias.filter(r => r.problema === detectedProblema);
-            if (filtered.length > 0) referencias = filtered;
+            const probNorm = norm(detectedProblema);
+            const byName = this.data.disease_references.filter(
+                r => norm(r.nombre_enfermedad).includes(probNorm) || norm(r.problema) === probNorm
+            );
+            const byCropAndName = referencias.filter(
+                r => norm(r.nombre_enfermedad).includes(probNorm) || norm(r.problema) === probNorm
+            );
+            if (byCropAndName.length > 0) {
+                referencias = byCropAndName;
+            } else if (byName.length > 0) {
+                referencias = byName;
+            }
         }
         if (referencias.length > 0) {
             ui_actions.push({ type: "show_disease_photos", data: referencias });
         }
 
         // 4. Buscar productos
-        let productos = this.data.products.filter(p => p.cultivos && p.cultivos.includes(detectedCultivo));
+        let productos = this.data.products.filter(p => p.cultivos && norm(p.cultivos).includes(norm(detectedCultivo)));
         if (detectedProblema) {
-            const filtered = productos.filter(p => p.problemas && p.problemas.includes(detectedProblema));
+            const probNorm = norm(detectedProblema);
+            const filtered = productos.filter(p => p.problemas && norm(p.problemas).includes(probNorm));
             if (filtered.length > 0) productos = filtered;
         }
         if (productos.length > 0) {

@@ -33,8 +33,10 @@ const KIOSK_VOICE_CONFIG = (() => {
         aiVoice: 'onyx',               // Voz de OpenAI TTS (onyx = masculina, cálida, profesional)
         preferAiVoice: true,           // Usar la voz de la IA siempre que haya conexión
         ttsEndpoint: '/api/tts',
-        ttsTimeoutMs: 8000,
-        postSpeechDelayMs: 700,        // Margen anti-reverberación antes de reabrir el micrófono
+        ttsTimeoutMs: 15000,           // Margen amplio: evita caer a la voz robótica por lentitud
+        postSpeechDelayMs: 550,        // Margen anti-reverberación antes de reabrir el micrófono
+        speechDebounceMs: 900,         // Espera de pausa para unir fragmentos en un solo turno
+        farewellCloseMs: 5000,         // Tras despedirse, segundos de gracia antes de cerrar la consulta
         echoGuardWindowMs: 2500,       // Ventana en la que se aplica el filtro de eco textual
         thinkingTimeoutMs: 45000,      // Si la IA no responde, se vuelve a escuchar
         nativeRate: 1.0,
@@ -45,8 +47,11 @@ const KIOSK_VOICE_CONFIG = (() => {
     });
 })();
 
-const WELCOME_TEXT = '¡Hola amigo productor! 👋 Soy el Ingeniero Agrónomo de FORAGRO. ' +
-    'Cuéntame, ¿qué cultivo tienes y qué plaga o problema estás viendo en tu finca?';
+const WELCOME_TEXT = '¡Hola, amigo productor! Soy el Inge de FORAGRO. ' +
+    'Cuéntame, ¿qué cultivo tienes y qué problema estás viendo?';
+
+// Muletillas/ruido que el reconocedor a veces transcribe solo.
+const FILLER_WORDS = new Set(['eh', 'ah', 'mm', 'mmm', 'um', 'uh', 'ay', 'oh', 'eh eh', 'este', 'pues']);
 
 const State = Object.freeze({
     IDLE: 'idle',
@@ -73,13 +78,46 @@ function normalizeText(text) {
         .trim();
 }
 
-/** Limpia markdown y emojis para que no se pronuncien. */
+/** Limpia markdown, enlaces, nombres de archivo y emojis para que no se pronuncien. */
 function stripForSpeech(text) {
     return (text || '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')                         // ![alt](imagen.png)
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')                       // [texto](url) -> texto
+        .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+        .replace(/[\w\-./\\]*\.(?:png|jpe?g|gif|webp|svg|bmp|pdf|mp3|mp4|wav)\b/gi, ' ')
+        .replace(/\(\s*\)/g, ' ')
         .replace(/\p{Extended_Pictographic}/gu, '')
-        .replace(/[*_#`>~]/g, '')
+        .replace(/[*_#`>~|]/g, ' ')
+        .replace(/\s*[,;:]\s*(?=[.!?]|$)/g, '')
         .replace(/\s+/g, ' ')
+        .replace(/\s+([,.;:!?])/g, '$1')
         .trim();
+}
+
+// ---------------------------------------------------------------------------
+// Detección de despedida (texto normalizado: minúsculas y sin acentos)
+// ---------------------------------------------------------------------------
+// Despedida explícita del productor en cualquier parte de la frase.
+const USER_FAREWELL_RE = /\b(adios|hasta luego|hasta pronto|hasta la proxima|hasta manana|nos vemos|chao|chau|bye|ya me voy|me retiro|eso es todo|eso seria todo|es todo por hoy|ya no necesito nada|no necesito nada mas|ya no ocupo nada|no ocupo nada mas|ya estuvo|que le vaya bien|que te vaya bien|que dios le bendiga|que dios te bendiga)\b/;
+// Cierre corto que solo cuenta si el Ingeniero también se despide ("gracias", "no, gracias").
+const USER_CLOSING_RE = /^(no )?(ok |okay |bueno |listo |perfecto |excelente |muy bien )?(muchas |mil )?gracias( (ingeniero|inge|amigo|doctor|senor|por todo|por la ayuda|muy amable|muy amable ingeniero))*$|^(no )?(nada mas|eso nomas|asi esta bien|ya)( gracias)?( muchas gracias)?$/;
+// El Ingeniero se despide en su respuesta.
+const BOT_FAREWELL_RE = /\b(que le vaya bien|que te vaya bien|hasta luego|hasta pronto|adios|vuelva pronto|vuelve pronto|buena cosecha|bendiciones|fue un gusto|un placer atender(te|le|lo)?|con mucho gusto|exitos con|feliz dia|buen dia)\b/;
+
+/**
+ * ¿Este intercambio cierra la conversación?
+ * - Si el Ingeniero hace una pregunta, nunca se cierra (espera respuesta).
+ * - Despedida explícita del productor -> se cierra.
+ * - "Gracias" a secas -> solo si el Ingeniero también se despidió.
+ */
+function isFarewellExchange(userText, botText) {
+    const user = normalizeText(userText);
+    if (!user) return false;
+    if ((botText || '').includes('?')) return false;
+
+    const bot = normalizeText(botText);
+    if (USER_FAREWELL_RE.test(user)) return true;
+    return USER_CLOSING_RE.test(user) && BOT_FAREWELL_RE.test(bot);
 }
 
 /**
@@ -455,6 +493,11 @@ class KioskController {
         this.listeningSince = 0;
         this.speechTurn = 0;             // Invalida turnos de habla interrumpidos
         this.thinkingTimer = null;
+        this.hasGreeted = false;         // La bienvenida local ya se dijo
+        this.pendingSpeech = '';         // Fragmentos de habla por unir en un solo turno
+        this.speechDebounceTimer = null;
+        this.lastUserText = '';          // Último turno del productor (para detectar despedidas)
+        this.closeTimer = null;          // Cierre automático tras la despedida
 
         // DOM
         this.el = {
@@ -552,6 +595,12 @@ class KioskController {
         this.isConsultationActive = false;
         this.clearThinkingTimer();
         this.speechTurn++;
+        clearTimeout(this.speechDebounceTimer);
+        this.pendingSpeech = '';
+        this.hasGreeted = false;
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+        this.lastUserText = '';
         this.voice.stop();
         this.setState(State.IDLE);
 
@@ -599,7 +648,10 @@ class KioskController {
                 hint = '🔈 Toca la pantalla para interrumpir';
                 break;
             case State.LISTENING:
-                if (!this.listener.supported) {
+                if (this.closeTimer) {
+                    status = 'Finalizando consulta...';
+                    hint = '👋 ¡Gracias por tu visita! (habla si necesitas algo más)';
+                } else if (!this.listener.supported) {
                     status = 'Listo';
                     hint = 'Utiliza el teclado en pantalla';
                 } else if (this.micEnabled) {
@@ -625,7 +677,7 @@ class KioskController {
 
     // -- Habla del Ingeniero -------------------------------------------------
 
-    async say(text, audioBase64 = null) {
+    async say(text, audioBase64 = null, closing = false) {
         const turn = ++this.speechTurn;
         this.lastBotText = text;
 
@@ -639,6 +691,8 @@ class KioskController {
         if (turn !== this.speechTurn || !this.isConsultationActive) return;
 
         this.setState(State.LISTENING);
+        // Tras la despedida, unos segundos de gracia (por si dice algo más) y se cierra.
+        if (closing) this.scheduleClose();
     }
 
     interruptSpeech() {
@@ -659,9 +713,52 @@ class KioskController {
             return;
         }
 
-        console.log('🎤 Reconocido:', transcript);
-        this.appendMessage('user', transcript);
-        this.sendMessage(transcript);
+        // Ruido / muletillas sueltas: no merecen un turno.
+        const normalized = normalizeText(transcript);
+        if (!this.pendingSpeech && (normalized.length < 2 || FILLER_WORDS.has(normalized))) {
+            console.log('🔇 Ruido ignorado:', transcript);
+            return;
+        }
+
+        // El productor sigue hablando: cancelar un cierre por despedida pendiente.
+        this.cancelScheduledClose();
+
+        // Juntar fragmentos: el reconocedor suele partir una frase en varios resultados finales.
+        this.pendingSpeech = (this.pendingSpeech ? this.pendingSpeech + ' ' : '') + transcript;
+        clearTimeout(this.speechDebounceTimer);
+        this.speechDebounceTimer = setTimeout(() => this.flushUserSpeech(), this.config.speechDebounceMs);
+    }
+
+    flushUserSpeech() {
+        const text = this.pendingSpeech.trim();
+        this.pendingSpeech = '';
+        clearTimeout(this.speechDebounceTimer);
+        if (!text || !this.isConsultationActive || this.state !== State.LISTENING) return;
+
+        console.log('🎤 Reconocido:', text);
+        this.lastUserText = text;
+        this.appendMessage('user', text);
+        this.sendMessage(text);
+    }
+
+    // -- Cierre automático tras la despedida --------------------------------
+
+    scheduleClose() {
+        this.cancelScheduledClose();
+        this.closeTimer = setTimeout(() => {
+            this.closeTimer = null;
+            if (!this.isConsultationActive || this.state !== State.LISTENING || this.pendingSpeech) return;
+            console.log('👋 Consulta finalizada tras la despedida.');
+            this.resetToIdle();
+        }, this.config.farewellCloseMs);
+        this.renderState();
+    }
+
+    cancelScheduledClose() {
+        if (!this.closeTimer) return;
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+        this.renderState();
     }
 
     handleMicError(error) {
@@ -679,9 +776,14 @@ class KioskController {
         this.startThinkingTimer();
 
         if (this.isOnline && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            // La bienvenida ya se dijo en el kiosco: evitar que la IA salude otra vez.
+            const outgoing = this.hasGreeted
+                ? text
+                : `[Nota del sistema: ya saludaste y te presentaste al productor; NO vuelvas a saludar ni a presentarte, responde directo a lo que dice.] ${text}`;
+            this.hasGreeted = true;
             this.ws.send(JSON.stringify({
                 type: 'message',
-                message: text,
+                message: outgoing,
                 cultivo: this.context.cultivo,
                 zona: this.context.zona,
                 voice: this.config.aiVoice,
@@ -710,7 +812,9 @@ class KioskController {
         this.handleUiActions(data.ui_actions);
 
         if (reply) {
-            this.say(reply, data.audio || null);
+            const closing = isFarewellExchange(this.lastUserText, reply);
+            if (closing) console.log('👋 Despedida detectada: la consulta se cerrará al terminar de hablar.');
+            this.say(reply, data.audio || null, closing);
         } else {
             this.setState(State.LISTENING);
         }

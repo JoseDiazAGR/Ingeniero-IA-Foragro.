@@ -1,23 +1,24 @@
 """
-Script para importar y sincronizar el catálogo oficial de FORAGRO desde CSV a PostgreSQL / Supabase.
+Script para importar, limpiar y sincronizar el catálogo oficial de productos y
+enfermedades de FORAGRO en PostgreSQL / Supabase.
 Uso:
     python scripts/import_catalog.py [ruta_al_csv]
-Por defecto busca: ../docs/catalogo_foragro_honduras.csv
 """
 
 import csv
-import os
 import sys
 from pathlib import Path
 
-# Agregar directorio backend al sys.path para importar app
 CURRENT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = CURRENT_DIR.parent
 ROOT_DIR = BACKEND_DIR.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.database import get_db, init_db
-from app.config import logger
+from app.data.seed_catalog import INITIAL_DISEASE_REFERENCES
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def import_catalog(csv_path: Path):
@@ -27,8 +28,8 @@ def import_catalog(csv_path: Path):
 
     print(f"📖 Leyendo catálogo desde: {csv_path.name}...")
 
-    # Leer CSV con soporte utf-8 / utf-8-sig
     products = []
+    valid_skus = []
     with open(csv_path, mode="r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for idx, row in enumerate(reader, start=1):
@@ -36,7 +37,6 @@ def import_catalog(csv_path: Path):
             nombre = (row.get("nombre") or "").strip()
             categoria = (row.get("categoria") or "").strip()
             if not sku or not nombre:
-                print(f"⚠️ Fila {idx}: SKU o Nombre vacío. Omitiendo.")
                 continue
 
             try:
@@ -49,6 +49,11 @@ def import_catalog(csv_path: Path):
             except ValueError:
                 stock = 0
 
+            imagen_url = (row.get("imagen_url") or "").strip()
+            if imagen_url.startswith("https://www.foragro.com/images/productos/"):
+                imagen_url = ""
+
+            valid_skus.append(sku)
             products.append({
                 "sku": sku,
                 "nombre": nombre,
@@ -61,12 +66,11 @@ def import_catalog(csv_path: Path):
                 "stock": stock,
                 "unidad": (row.get("unidad") or "Unidad").strip(),
                 "descripcion": (row.get("descripcion") or "").strip(),
-                "imagen_url": (row.get("imagen_url") or "").strip(),
+                "imagen_url": imagen_url,
             })
 
-    print(f"📦 Total de productos procesados: {len(products)}")
+    print(f"📦 Total de productos oficiales procesados: {len(products)}")
 
-    # Asegurar pool inicializado
     init_db()
 
     upsert_sql = """
@@ -91,23 +95,45 @@ def import_catalog(csv_path: Path):
         imagen_url = EXCLUDED.imagen_url;
     """
 
-    print("🚀 Sincronizando con Supabase PostgreSQL...")
-    inserted_count = 0
+    print("🚀 Sincronizando con PostgreSQL y limpiando registros obsoletos...")
     with get_db() as conn:
+        # 1. Eliminar productos de prueba/obsoletos que no pertenecen al catálogo oficial
+        if valid_skus:
+            placeholders = ", ".join(["%s"] * len(valid_skus))
+            cur_del = conn.execute(
+                f"DELETE FROM products WHERE sku NOT IN ({placeholders})",
+                tuple(valid_skus),
+            )
+            print(f"🧹 Productos obsoletos eliminados de BD: {cur_del.rowcount}")
+
+        # 2. Upsert de los 38 productos oficiales
         for p in products:
             conn.execute(upsert_sql, p)
-            inserted_count += 1
+
+        # 3. Reemplazar referencias de enfermedades con las 18 verificadas
+        conn.execute("DELETE FROM disease_references")
+        for d in INITIAL_DISEASE_REFERENCES:
+            conn.execute(
+                """
+                INSERT INTO disease_references (
+                    cultivo, problema, nombre_enfermedad, nombre_cientifico,
+                    descripcion_sintomas, foto_url, productos_recomendados_ids
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    d["cultivo"], d["problema"], d["nombre_enfermedad"], d["nombre_cientifico"],
+                    d["descripcion_sintomas"], d["foto_url"], d["productos_recomendados_ids"],
+                ),
+            )
+
         conn.commit()
 
-    with get_db() as conn:
-        total = conn.execute("SELECT count(*) as cnt FROM products").fetchone()["cnt"]
-
-    print(f"✅ ¡Éxito! Sincronizados {inserted_count} productos.")
-    print(f"📊 Total actual de productos en la base de datos: {total}")
+    print(f"✅ Sincronización exitosa: {len(products)} productos y {len(INITIAL_DISEASE_REFERENCES)} enfermedades verificadas.")
     return True
 
 
 if __name__ == "__main__":
     default_csv = ROOT_DIR / "docs" / "catalogo_foragro_honduras.csv"
     target_csv = Path(sys.argv[1]) if len(sys.argv) > 1 else default_csv
-    import_catalog(target_csv)
+    success = import_catalog(target_csv)
+    sys.exit(0 if success else 1)

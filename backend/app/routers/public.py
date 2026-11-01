@@ -275,10 +275,10 @@ def get_products(
         )
         params = []
         if cultivo:
-            query += " AND (cultivos LIKE %s OR cultivos LIKE '%%Todos%%')"
+            query += " AND (cultivos ILIKE %s OR cultivos ILIKE '%%Todos%%')"
             params.append(f"%{cultivo}%")
         if categoria:
-            query += " AND categoria LIKE %s"
+            query += " AND categoria ILIKE %s"
             params.append(f"%{categoria}%")
         query += " ORDER BY categoria, stock DESC"
         rows = conn.execute(query, params).fetchall()
@@ -294,7 +294,7 @@ def get_disease_references(
     with get_db() as conn:
         if cultivo:
             rows = conn.execute(
-                "SELECT * FROM disease_references WHERE cultivo LIKE %s ORDER BY id ASC",
+                "SELECT * FROM disease_references WHERE cultivo ILIKE %s ORDER BY id ASC",
                 (f"%{cultivo}%",),
             ).fetchall()
         else:
@@ -411,7 +411,8 @@ def get_offline_cache(_rl=Depends(rate_limit(5, 60))):
         disease_refs = [
             dict(r)
             for r in conn.execute(
-                "SELECT cultivo, problema, nombre_enfermedad, descripcion_sintomas, foto_url "
+                "SELECT cultivo, problema, nombre_enfermedad, nombre_cientifico, "
+                "descripcion_sintomas, foto_url, productos_recomendados_ids "
                 "FROM disease_references ORDER BY cultivo"
             ).fetchall()
         ]

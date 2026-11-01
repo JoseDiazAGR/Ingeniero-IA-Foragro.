@@ -126,7 +126,9 @@
                         <div class="card photo">
                             <img src="${p.foto_url || ''}" alt="${p.nombre_enfermedad}" onerror="this.style.display='none'">
                             <h3>${p.nombre_enfermedad}</h3>
+                            ${p.nombre_cientifico ? `<p style="font-size:11px;font-style:italic;color:#6ee7b7;margin-bottom:4px;">${p.nombre_cientifico}</p>` : ''}
                             <p>${p.descripcion_sintomas || ''}</p>
+                            ${p.productos_recomendados_ids ? `<p style="font-size:11px;color:#a7f3d0;margin-top:6px;"><i class="fas fa-shield-halved"></i> Control: <strong>${p.productos_recomendados_ids}</strong></p>` : ''}
                         </div>
                     `;
                 });

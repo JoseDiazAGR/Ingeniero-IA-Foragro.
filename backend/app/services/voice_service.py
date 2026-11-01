@@ -11,6 +11,7 @@ import httpx
 from fastapi import HTTPException, UploadFile
 
 from app.config import OPENAI_API_KEY, logger
+from app.services.speech_text import prepare_for_speech
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache", "audio")
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -19,11 +20,19 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # 'onyx': Tono masculino, cálido, maduro y profesional (ideal para agrónomo experimentado)
 # 'echo': Tono masculino amigable
 DEFAULT_VOICE = "onyx"
-TTS_MODEL = "tts-1"  # Optimizado para ultra-baja latencia
+# tts-1 = ultra-baja latencia. Para mayor naturalidad y acento latino puede usarse
+# TTS_MODEL=gpt-4o-mini-tts en el .env (acepta instrucciones de estilo).
+TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
+TTS_SPEED = float(os.getenv("TTS_SPEED", "1.05"))  # Ligero aumento para mayor dinamismo
+TTS_INSTRUCTIONS = (
+    "Habla SIEMPRE en español latinoamericano con acento centroamericano (hondureño), "
+    "tono cálido, cercano y pausado, como un ingeniero agrónomo conversando con un productor "
+    "en la tienda. Pronuncia todos los números y unidades en español."
+)
 
 
 def get_cache_path(text: str, voice: str) -> str:
-    key = f"{voice}:{text.strip()}".encode("utf-8")
+    key = f"{TTS_MODEL}:{voice}:{text.strip()}".encode("utf-8")
     filename = hashlib.sha256(key).hexdigest() + ".mp3"
     return os.path.join(CACHE_DIR, filename)
 
@@ -33,9 +42,13 @@ async def synthesize_speech(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     Sintetiza audio a partir de texto. Si ya fue generado previamente,
     lo devuelve instantáneamente desde la caché local sin llamadas de red.
     """
-    cleaned = text.strip()
+    # Números, precios, siglas y nombres de archivo -> español hablado (evita que lea en inglés).
+    cleaned = prepare_for_speech(text.strip())
     if not cleaned:
         raise HTTPException(status_code=400, detail="El texto para síntesis no puede estar vacío.")
+
+    # Limitar longitud para prevenir abuso
+    cleaned = cleaned[:1200]
 
     cache_file = get_cache_path(cleaned, voice)
     if os.path.exists(cache_file):
@@ -48,8 +61,17 @@ async def synthesize_speech(text: str, voice: str = DEFAULT_VOICE) -> bytes:
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="OpenAI API Key no configurada para TTS.")
 
-    # Limitar longitud para prevenir abuso
-    cleaned = cleaned[:1200]
+    payload = {
+        "model": TTS_MODEL,
+        "input": cleaned,
+        "voice": voice,
+        "response_format": "mp3",
+    }
+    if TTS_MODEL.startswith("gpt-4o"):
+        # Los modelos gpt-4o-*-tts aceptan instrucciones de estilo (no aceptan `speed`).
+        payload["instructions"] = TTS_INSTRUCTIONS
+    else:
+        payload["speed"] = TTS_SPEED
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -59,13 +81,7 @@ async def synthesize_speech(text: str, voice: str = DEFAULT_VOICE) -> bytes:
                     "Authorization": f"Bearer {OPENAI_API_KEY}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": TTS_MODEL,
-                    "input": cleaned,
-                    "voice": voice,
-                    "response_format": "mp3",
-                    "speed": 1.05,  # Ligero aumento para mayor dinamismo
-                },
+                json=payload,
             )
 
             if response.status_code != 200:
